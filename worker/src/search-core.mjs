@@ -48,7 +48,8 @@ export const SITES = [
     templates: ["{origin}/auete4so.php?searchword={kw}", "{origin}/index.php/vod/search.html?wd={kw}"], captcha: true },
   { id: "darkvod", name: "黑夜影院", origin: "https://darkvod.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/index.php?m=vod-search&wd={kw}",
-    templates: ["{origin}/index.php?m=vod-search&wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}", "{origin}/search.php?q={kw}", "{origin}/tag/?wd={kw}&submit="] },
+    templates: ["{origin}/index.php?m=vod-search&wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}", "{origin}/search.php?q={kw}", "{origin}/tag/?wd={kw}&submit="],
+    apiSearch: "{origin}/index.php/ajax/suggest?mid=1&wd={kw}&page=1" },
   { id: "nivod", name: "泥视频", origin: "https://www.nivod.vip", quality: "1080P", qualityScore: 3,
     search: "{origin}/index.php/vod/search.html?wd={kw}",
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
@@ -631,6 +632,39 @@ async function probeSiteImpl(site, kw, proxyBase) {
     if (f.status >= 500 && f.status < 600) return { ...base, dead: true, latency_ms: latency };
     if (f.status >= 400 && f.status < 600) return { ...base, needsCaptcha: true, blocked: true, latency_ms: latency };
     return { ...base, latency_ms: latency };
+  }
+  
+  // API 搜索站点（如黑夜影院）：HTML 是 JS 渲染的 SPA，但后端有 JSON API 返回搜索结果+海报
+  if (site.apiSearch) {
+    const apiUrl = buildSearchUrl(site.apiSearch, origin, kw);
+    try {
+      const res = await fetch(apiUrl, {
+        headers: { "User-Agent": UA, "Accept": "application/json" },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        redirect: "follow",
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.code === 1 && json.list && json.list.length > 0) {
+          // 找最匹配的结果（标题包含关键词且最短）
+          const kwNorm = kw.replace(/\s+/g, "");
+          const matched = json.list.filter(item => item.name && item.name.includes(kwNorm));
+          const best = matched.sort((a, b) => a.name.length - b.name.length)[0] || json.list[0];
+          if (best) {
+            // 构造详情页 URL（Apple CMS 标准格式）
+            const detailUrl = `${origin}/vod/detail/${best.id}.html`;
+            // 处理海报 URL（可能是相对路径）
+            let poster = best.pic || "";
+            if (poster && poster.startsWith("/")) poster = origin + poster;
+            if (poster && poster.startsWith("//")) poster = "https:" + poster;
+            return { ...base, latency_ms: Date.now() - start,
+              title: best.name, pageUrl: detailUrl, poster: poster || null,
+              posterCand: poster ? [poster] : [], verified: true,
+              realQuality: false };
+          }
+        }
+      }
+    } catch (e) { /* API 失败则回退到 HTML 解析 */ }
   }
   
   const f = await fetchWithFallback(target, proxyBase);

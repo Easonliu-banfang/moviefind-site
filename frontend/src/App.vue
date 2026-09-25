@@ -563,12 +563,14 @@ a { color: inherit; text-decoration: none; }
 .enh-frames i:nth-child(5) { height: 5px; animation-delay: .48s; }
 .result-sort { color: var(--faint); font-size: 12px; letter-spacing: 1px; }
 
-/* 卡片网格：固定列宽 + 居中，避免宽屏拉伸过宽、窄屏挤压过小 */
+/* 卡片网格：自适应填充，最大宽度限制防止超宽屏拉伸 */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, 158px);
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 14px;
-  justify-content: center;
+  max-width: 1280px;
+  margin-left: auto;
+  margin-right: auto;
   margin-top: 4px;
 }
 
@@ -688,7 +690,7 @@ a { color: inherit; text-decoration: none; }
   .title { font-size: 52px; letter-spacing: 3px; }
   .features { grid-template-columns: repeat(2, 1fr); }
   .search button { padding: 0 20px; }
-  .card-grid { grid-template-columns: repeat(auto-fill, 132px); gap: 10px; }
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 10px; max-width: none; }
   .card-info { padding: 8px 10px 10px; }
   .card-movie { font-size: 13px; }
 }
