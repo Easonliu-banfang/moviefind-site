@@ -6,7 +6,7 @@
  *   GET /api/search?q=<关键词>[&max=<数量>]  → 聚合搜索，返回有片源站点，延迟升序
  *   GET /api/sites                          → 站点清单
  */
-import { run, SITES, probeSiteDebug, poolLimit, MAX_CONCURRENT } from "./search-core.mjs";
+import { run, SITES, probeSiteDebug, findTemplates, poolLimit, MAX_CONCURRENT } from "./search-core.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -39,6 +39,14 @@ export default {
         const results = [];
         await poolLimit(SITES, MAX_CONCURRENT, async (site) => { results.push(await probeSiteDebug(site, q)); });
         results.sort((a, b) => (a.ok ? 0 : 1) - (b.ok ? 0 : 1));
+        return j({ ok: true, q, results });
+      }
+      if (url.pathname === "/api/find") {
+        const q = (url.searchParams.get("q") || "狂飙").trim();
+        const sid = url.searchParams.get("site");
+        const sites = sid ? SITES.filter((s) => s.id === sid) : SITES;
+        const results = [];
+        await poolLimit(sites, MAX_CONCURRENT, async (site) => { results.push(await findTemplates(site, q)); });
         return j({ ok: true, q, results });
       }
       return j({ ok: false, error: "Not Found" }, 404);
