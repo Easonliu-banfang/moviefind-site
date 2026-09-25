@@ -132,9 +132,9 @@ function siteTemplates(site) {
 }
 
 // 从HTML解析: has / title / pageUrl / liveQuality / liveScore / needsCaptcha
-// 判定策略（双保险，最大限度避免误判）：
+// 判定策略（宽松版）：
 //   1) 页面必须真实包含搜索关键词 —— 证明这页确实是关于该片的搜索结果；
-//   2) 详情/播放链接数 >= 2 —— 证明是结果列表而非导航栏/页脚残留。
+//   2) 详情/播放链接数 >= 1 —— 只要出现一个片源就展示（关键词已作相关性闸门，空结果页由 emptyPats 拦截）。
 export function parseResultPage(html, origin, kw) {
   const emptyPats = /没有找到|没有相关|暂无.*结果|搜索不到|没有您要找|抱歉.*没有|not\s*found|暂无该|查无此|未找到相关/i;
 
@@ -186,7 +186,7 @@ export function parseResultPage(html, origin, kw) {
     else if (t.includes("高清") || t.includes("超清")) { liveQuality = "高清"; liveScore = 2; }
   }
 
-  const hasIndex = detailCount >= 2;
+  const hasIndex = detailCount >= 1;
   return { has: hasIndex, title, detailPath, liveQuality, liveScore,
            pageUrl: detailPath ? abs(detailPath, origin) : null, needsCaptcha: false, detailCount };
 }

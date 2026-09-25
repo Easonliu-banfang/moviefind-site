@@ -82,8 +82,9 @@ function demo(h) { kw.value = h; doSearch(); }
               <p class="card-tip" v-else>该站已找到片源 · 可立即播放或搜该片</p>
             </div>
             <div class="card-actions">
-              <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-              <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go ghost" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
+              <a v-if="!r.needsCaptcha" class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
+              <a v-else class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">立即播放 ↗</a>
+              <a v-if="!r.needsCaptcha && r.pageUrl && r.pageUrl !== r.searchUrl" class="go ghost" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
             </div>
           </li>
         </ol>
