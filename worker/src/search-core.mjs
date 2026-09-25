@@ -220,7 +220,10 @@ export function parseResultPage(html, origin, kw) {
       return { has: true, title, detailPath, liveQuality, liveScore,
                pageUrl: detailPath ? abs(detailPath, origin) : null, needsCaptcha: false, detailCount };
     }
-    // 有详情链接但文字均不含关键词（图片结果等）→ 不强行给立即播放，退回普通跳转
+    // 有详情链接但文字均不含关键词（海报/图片结果，标题在 alt/图片里）→ 仍判定「有片源」（绿），
+    // 但不强行深链到播放页（避免链到导航/分类），交由「搜该片」引导用户进站。
+    return { has: true, title: null, detailPath: null, liveQuality: "", liveScore: 0,
+             pageUrl: null, needsCaptcha: false, detailCount };
   }
 
   // 2) 无结果时才判定验证码 / 空页（不影响上面已确认有片源的站）
