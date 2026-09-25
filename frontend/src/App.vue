@@ -159,6 +159,7 @@ const others = computed(() =>
 const hiddenList = computed(() => results.value.filter((r) => hiddenIds.value.has(r.id)));
 
 // 非阻塞：Worker 可选核验，把已确认站点升级为 ✅ 立即播放，并回填「实测画质」
+// 支持每站多结果：Worker 返回 id 为 `site-id-0`、`site-id-1` 等多条结果时，为每条创建独立卡片
 async function enhanceWithWorker(q) {
   enhancing.value = true;
   try {
@@ -169,25 +170,84 @@ async function enhanceWithWorker(q) {
     if (!r.ok) return;
     const d = await r.json();
     if (!d.ok) return;
-    const map = new Map((d.results || []).map((x) => [x.id, x]));
-    for (const card of results.value) {
-      const w = map.get(card.id);
-      if (w) {
-        card.verified = !!w.verified;
-        card.needsCaptcha = !!w.needsCaptcha;
-        card.dead = !!w.dead; // 真·不可达（连接失败/DNS/5xx）→ 自动隐藏
-        card.realQuality = !!w.realQuality; // Worker 实测到的画质 vs 站点标称
-        card.quality = w.quality || card.quality;
-        card.qualityScore = w.qualityScore || card.qualityScore;
-        card.pageUrl = w.pageUrl || null;
-        card.title = w.title || null;
-        card.poster = w.poster || null;   // Worker 实测封面；没有则保持 null（显示 monogram 井）
-        if (w.posterCand && w.posterCand.length) card.posterCand = w.posterCand; // 备用封面候选
-        card._plan = buildPosterPlan(card.poster, card.posterCand); // 直链→代取 的失败回退序列
-        card._pi = 0;
-        card.matchScore = w.matchScore || 0;  // 关键词匹配度评分
-        card.latency_ms = w.latency_ms || 0;
+    const workerResults = d.results || [];
+    
+    // 按 base id 分组（`site-id-0` → base `site-id`）
+    const byBaseId = new Map();
+    for (const w of workerResults) {
+      const baseId = w.id.replace(/-\d+$/, "");
+      if (!byBaseId.has(baseId)) byBaseId.set(baseId, []);
+      byBaseId.get(baseId).push(w);
+    }
+    
+    const newCards = []; // 多结果产生的新卡片
+    
+    for (const [baseId, ws] of byBaseId) {
+      // 找对应的现有卡片
+      const existingCard = results.value.find(c => c.id === baseId);
+      
+      // 第一条结果：更新现有卡片
+      const first = ws[0];
+      if (existingCard) {
+        existingCard.verified = !!first.verified;
+        existingCard.needsCaptcha = !!first.needsCaptcha;
+        existingCard.dead = !!first.dead;
+        existingCard.realQuality = !!first.realQuality;
+        existingCard.quality = first.quality || existingCard.quality;
+        existingCard.qualityScore = first.qualityScore || existingCard.qualityScore;
+        existingCard.pageUrl = first.pageUrl || null;
+        existingCard.title = first.title || null;
+        existingCard.poster = first.poster || null;
+        if (first.posterCand && first.posterCand.length) existingCard.posterCand = first.posterCand;
+        existingCard._plan = buildPosterPlan(existingCard.poster, existingCard.posterCand);
+        existingCard._pi = 0;
+        existingCard.matchScore = first.matchScore || 0;
+        existingCard.latency_ms = first.latency_ms || 0;
       }
+      
+      // 后续结果：创建新卡片
+      for (let i = 1; i < ws.length; i++) {
+        const w = ws[i];
+        const site = SITES.find(s => s.id === baseId);
+        if (!site) continue;
+        newCards.push({
+          id: w.id,
+          name: site.name,
+          quality: w.quality || site.quality,
+          qualityScore: w.qualityScore || site.qualityScore || 3,
+          ads: site.ads ?? true,
+          login: site.login ?? false,
+          realQuality: !!w.realQuality,
+          statusLabel: site.login === true ? "需登录"
+            : site.ads === true ? "可能含广告"
+            : "无广告·免登录",
+          statusCls: site.login === true ? "st-warn" : site.ads === true ? "st-muted" : "st-good",
+          origin: site.origin,
+          favicon: site.favicon || null,
+          searchUrl: w.pageUrl || buildSearchUrl(site, q),
+          verified: !!w.verified,
+          needsCaptcha: !!w.needsCaptcha,
+          dead: !!w.dead,
+          browserDead: false,
+          pageUrl: w.pageUrl || null,
+          title: w.title || null,
+          poster: w.poster || null,
+          posterCand: w.posterCand || [],
+          _plan: buildPosterPlan(w.poster, w.posterCand || []),
+          _pi: 0,
+          _faviconTimer: null,
+          matchScore: w.matchScore || 0,
+          latency_ms: w.latency_ms || 0,
+          _resultIdx: w._resultIdx || i,
+          _totalResults: w._totalResults || ws.length,
+        });
+        startFaviconTimer(newCards[newCards.length - 1]);
+      }
+    }
+    
+    // 添加新卡片到结果列表
+    if (newCards.length > 0) {
+      results.value.push(...newCards);
     }
   } catch {
     /* Worker 超时/失败：本地卡片照常可用，忽略 */

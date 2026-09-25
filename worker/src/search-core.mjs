@@ -457,7 +457,8 @@ function computeMatchScore(title, kw) {
   return 0;
 }
 
-// 从HTML解析: has / title / pageUrl / liveQuality / liveScore / needsCaptcha
+// 从HTML解析: has / title / pageUrl / liveQuality / liveScore / needsCaptcha / results
+// results: 数组，包含所有匹配的结果（每个元素有 title/pageUrl/poster/posterCand/detailPath/liveQuality/liveScore）
 export function parseResultPage(html, origin, kw) {
   const emptyPats = /没有找到|没有相关|暂无.*结果|搜索不到|没有您要找|抱歉.*没有|not\s*found|暂无该|查无此|未找到相关|未查询到|没有匹配/i;
 
@@ -499,33 +500,22 @@ export function parseResultPage(html, origin, kw) {
       return false;
     });
 
-    let chosenTag = null;
-    if (matched.length) {
-      // 一个关键词往往命中多个锚点（片名/相关推荐/短剧改版），挑「片名最贴近关键词」的那条：
-      // 标题含关键词时按标题长度算距离（越短越可能是纯片名），不含时给 1e6 兜底到原优先级。
-      const dist = (a) => {
-        const t = extractTitle(html, a[0], a[2] || "", kwSafe) || "";
-        return t.includes(kwSafe) ? t.length : 1e6;
-      };
-      const bestD = Math.min(...matched.map(dist));
-      const pool = matched.filter((a) => dist(a) === bestD);
-      chosenTag = (pool.find((a) => DETAIL_PRIORITY.test(a[0])) ||
-                    pool.find((a) => PLAY_PRIORITY.test(a[0])) ||
-                    pool[0])[0];
-    }
-
-    if (chosenTag) {
+    // 收集所有匹配的结果（去重，最多返回 10 条避免过多）
+    const results = [];
+    const seenUrls = new Set();
+    for (const a of matched) {
+      const chosenTag = a[0];
       const chosenHref = (chosenTag.match(/href="([^"]+)"/i) || [])[1] || "";
       const chosenInner = chosenTag.slice(chosenTag.indexOf(">") + 1, chosenTag.lastIndexOf("</a>"));
       // 片名提示：关键词 + 提取出的片名（用于 alt/title 与片名一致的交叉匹配）
       const hints = [kwSafe];
       const title = extractTitle(html, chosenTag, chosenInner, kwSafe);
       // 强约束：提取到的标题必须确实包含关键词，否则该链接并非真正的片名
-      //（如「电影 正片」「短剧」「电视剧 30集全」等模板/推荐噪声）→ 判为无结果，不绿。
-      if (!title || !title.includes(kwSafe)) {
-        return { has: false, title: null, detailPath: null, liveQuality: "", liveScore: 0,
-                 pageUrl: null, needsCaptcha: false, detailCount };
-      }
+      if (!title || !title.includes(kwSafe)) continue;
+      // 去重：同一详情页不重复
+      const pageUrl = abs(chosenHref, origin);
+      if (seenUrls.has(pageUrl)) continue;
+      seenUrls.add(pageUrl);
       // 画质：只在「命中结果附近」提取，避免把页面导航/筛选区的「高清」误当本片实测画质
       const qIdx = chosenHref ? html.indexOf(chosenHref) : -1;
       const qScope = qIdx >= 0 ? html.slice(Math.max(0, qIdx - 400), qIdx + 800) : html;
@@ -539,25 +529,34 @@ export function parseResultPage(html, origin, kw) {
         const near = collectPosterCands(html.slice(Math.max(0, qIdx - 800), qIdx + 1000), origin, hints);
         if (near[0]) { poster = near[0].url; posterCand = near.map(x => x.url).concat(posterCand).slice(0, 5); }
       }
+      results.push({ title, detailPath: chosenHref, liveQuality, liveScore,
+        pageUrl, poster, posterCand });
+      if (results.length >= 10) break; // 每站最多返回 10 条
+    }
 
-      return { has: true, title, detailPath: chosenHref, liveQuality, liveScore,
-               pageUrl: abs(chosenHref, origin), poster, posterCand, needsCaptcha: false, detailCount };
+    if (results.length > 0) {
+      // 返回所有结果，第一条作为主结果（向后兼容）
+      const first = results[0];
+      return { has: true, title: first.title, detailPath: first.detailPath,
+        liveQuality: first.liveQuality, liveScore: first.liveScore,
+        pageUrl: first.pageUrl, poster: first.poster, posterCand: first.posterCand,
+        needsCaptcha: false, detailCount, results };
     }
     // 含关键词且存在详情链接，但**无任一详情链接命中关键词、也无共现信号** → 保守判无结果（不绿，退回「去站里搜」）。
     // 封面仍尽力提取并标 posterGuess（弱信号）：让未绿站也能显示海报，而非只剩首字海报井。
     // 真·空结果页已被下方 emptyPats 拦截，不会走到这里，所以不会给空页配假封面。
     const guessCands = collectPosterCands(html, origin, kwSafe);
     return { has: false, title: null, detailPath: null, liveQuality: "", liveScore: 0,
-             pageUrl: null, needsCaptcha: false, detailCount,
+             pageUrl: null, needsCaptcha: false, detailCount, results: [],
              poster: guessCands[0] ? guessCands[0].url : null,
              posterCand: guessCands.map(x => x.url).slice(0, 5), posterGuess: true };
   }
 
   // 2) 无结果时才判定验证码 / 空页（不影响上面已确认有片源的站）
-  if (CAPTCHA_PATS.test(html)) return { has: false, needsCaptcha: true, captcha: true, pageUrl: null, title: null, detailCount: 0 };
-  if (emptyPats.test(html)) return { has: false, needsCaptcha: false, detailCount: 0 };
-  if (!hitKw) return { has: false, needsCaptcha: false, detailCount: 0 };
-  return { has: false, needsCaptcha: false, detailCount };
+  if (CAPTCHA_PATS.test(html)) return { has: false, needsCaptcha: true, captcha: true, pageUrl: null, title: null, detailCount: 0, results: [] };
+  if (emptyPats.test(html)) return { has: false, needsCaptcha: false, detailCount: 0, results: [] };
+  if (!hitKw) return { has: false, needsCaptcha: false, detailCount: 0, results: [] };
+  return { has: false, needsCaptcha: false, detailCount, results: [] };
 }
 
 // 诊断用：单站可达性（首模板）
@@ -628,12 +627,15 @@ export async function probeSite(site, kw, proxyBase = "") {
   try {
     const r = await probeSiteImpl(site, kw, proxyBase);
     if (!r) return base;
-    r.latency_ms = r.latency_ms || Date.now() - start;
-    // 计算关键词匹配度评分（标题越贴近搜索词 → 分数越高）
-    r.matchScore = computeMatchScore(r.title, kw);
-    return r;
+    // 支持返回数组（多结果）或单对象（单结果）
+    const results = Array.isArray(r) ? r : [r];
+    return results.map(res => {
+      res.latency_ms = res.latency_ms || Date.now() - start;
+      res.matchScore = res.matchScore ?? computeMatchScore(res.title, kw);
+      return res;
+    });
   } catch (e) {
-    return { ...base, err: String(e).slice(0, 120), latency_ms: Date.now() - start };
+    return { ...base, err: String(e).slice(0, 120), latency_ms: Date.now() - start, matchScore: 0 };
   }
 }
 
@@ -670,21 +672,27 @@ async function probeSiteImpl(site, kw, proxyBase) {
       if (res.ok) {
         const json = await res.json();
         if (json && json.code === 1 && json.list && json.list.length > 0) {
-          // 找最匹配的结果（标题包含关键词且最短）
+          // 返回所有匹配的结果（标题包含关键词）
           const kwNorm = kw.replace(/\s+/g, "");
           const matched = json.list.filter(item => item.name && item.name.includes(kwNorm));
-          const best = matched.sort((a, b) => a.name.length - b.name.length)[0] || json.list[0];
-          if (best) {
-            // 构造详情页 URL（Apple CMS 标准格式）
-            const detailUrl = `${origin}/vod/detail/${best.id}.html`;
-            // 处理海报 URL（可能是相对路径）
-            let poster = best.pic || "";
-            if (poster && poster.startsWith("/")) poster = origin + poster;
-            if (poster && poster.startsWith("//")) poster = "https:" + poster;
+          const list = (matched.length > 0 ? matched : json.list).slice(0, 10);
+          if (list.length > 0) {
+            const results = list.map((item, idx) => {
+              const detailUrl = `${origin}/vod/detail/${item.id}.html`;
+              let poster = item.pic || "";
+              if (poster && poster.startsWith("/")) poster = origin + poster;
+              if (poster && poster.startsWith("//")) poster = "https:" + poster;
+              return {
+                id: list.length > 1 ? `${base.id}-${idx}` : base.id,
+                title: item.name, pageUrl: detailUrl, poster: poster || null,
+                posterCand: poster ? [poster] : [], _resultIdx: idx, _totalResults: list.length
+              };
+            });
+            const first = results[0];
             return { ...base, latency_ms: Date.now() - start,
-              title: best.name, pageUrl: detailUrl, poster: poster || null,
-              posterCand: poster ? [poster] : [], verified: true,
-              realQuality: false };
+              id: base.id,
+              title: first.title, pageUrl: first.pageUrl, poster: first.poster,
+              posterCand: first.posterCand, verified: true, realQuality: false, results };
           }
         }
       }
@@ -703,10 +711,23 @@ async function probeSiteImpl(site, kw, proxyBase) {
     const p = parseResultPage(html, origin, kw);
     if (p.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true, blocked: !!f.viaProxy };
     if (p.has) {
+      // 多条结果：展开为多个卡片（每站最多 10 条），每条唯一 ID
+      if (p.results && p.results.length > 0) {
+        return p.results.map((r, idx) => ({
+          ...base, id: p.results.length > 1 ? `${base.id}-${idx}` : base.id,
+          quality: r.liveQuality || site.quality, qualityScore: r.liveScore || site.qualityScore,
+          latency_ms: Date.now() - start, title: r.title || null, pageUrl: r.pageUrl || target,
+          poster: r.poster || null, posterCand: r.posterCand || [], verified: true,
+          realQuality: !!(r.liveQuality), viaProxy: !!f.viaProxy,
+          matchScore: computeMatchScore(r.title, kw),
+          _resultIdx: idx, _totalResults: p.results.length
+        }));
+      }
       return { ...base, quality: p.liveQuality || site.quality, qualityScore: p.liveScore || site.qualityScore,
         latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, poster: p.poster || null,
         posterCand: p.posterCand || [], verified: true,
-        realQuality: !!(p.liveQuality), viaProxy: !!f.viaProxy };
+        realQuality: !!(p.liveQuality), viaProxy: !!f.viaProxy,
+        matchScore: computeMatchScore(p.title, kw) };
     }
     // 200 但未判有片源（JS渲染站/弱信号）→ 仍交给浏览器去搜；封面照样带上（弱信号海报）
     return { ...base, latency_ms: Date.now() - start, title: p.title || null,
@@ -731,7 +752,9 @@ export const run = {
     const out = [];
     await poolLimit(SITES, MAX_CONCURRENT, async (site) => {
       const r = await probeSite(site, kw, proxyBase);
-      if (r) out.push(r);
+      // 支持数组（多结果）或单对象（单结果）
+      if (Array.isArray(r)) out.push(...r);
+      else if (r) out.push(r);
     });
     // 排序：关键词匹配度 > 已验证有片源 > 延迟升序 > 画质次之
     out.sort((a, b) =>
