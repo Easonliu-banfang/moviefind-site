@@ -260,12 +260,13 @@ export const SITES = [
     "name": "豆花电影网",
     "quality": "1080P",
     "qualityScore": 3,
-    "origin": "https://dhvideo.cc",
-    "search": "{origin}/s.html?name={kw}",
+    "origin": "https://douhua.me",
+    "search": "{origin}/s?name={kw}",
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "noVerify": true
   },
   {
     "id": "zip0",
