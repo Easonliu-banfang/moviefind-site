@@ -46,13 +46,28 @@ function wellStyle(id) {
 }
 function monogram(name) { return (name || "?").trim().charAt(0); }
 
-// 站点 favicon：先试 /favicon.ico，加载失败则 Worker 解析真实 URL，再失败回退 monogram
+// 站点 favicon：先试 /favicon.ico，加载失败则 Worker 解析真实 URL，再失败回退品牌徽章
 function getFavicon(origin) {
   if (!origin) return null;
   try { return new URL("/favicon.ico", origin).href; } catch { return origin + "/favicon.ico"; }
 }
+// 10 秒内图标未加载完成 → 自动回退到品牌徽章（避免长时间卡在空白圆圈）
+function startFaviconTimer(r) {
+  if (r._faviconTimer) return; // 已启动过则不重复
+  r._faviconTimer = setTimeout(() => {
+    r._faviconTimer = null;
+    r._noFavicon = true;
+  }, 10000);
+}
+function clearFaviconTimer(r) {
+  if (r._faviconTimer) { clearTimeout(r._faviconTimer); r._faviconTimer = null; }
+}
+// favicon 加载成功 → 清除超时
+function onFaviconLoad(r) { clearFaviconTimer(r); }
 // favicon 加载失败 → 调 Worker 解析站点 HTML 里的真实 icon URL
 async function onFaviconErr(r) {
+  clearFaviconTimer(r);
+  if (r._noFavicon) return;
   if (r._faviconRetried) { r._noFavicon = true; return; }
   r._faviconRetried = true;
   try {
@@ -103,6 +118,7 @@ function makeCard(site, q) {
     posterCand: [],          // 备用封面候选（站点自己页面里解析出的其他海报图）
     _plan: [],              // 封面回退序列：[直链, Worker代取, 直链, 代取, ...]，见 buildPosterPlan
     _pi: 0,                 // 当前回退序列下标
+    _faviconTimer: null,    // 图标加载 10 秒超时计时器
     latency_ms: 0,
   };
 }
@@ -234,6 +250,8 @@ async function doSearch() {
   // 短暂动画后本地即时渲染全部站点（不等待 Worker）
   setTimeout(() => {
     results.value = SITES.map((s) => makeCard(s, q));
+    // 启动 10 秒图标超时计时器（加载失败/超时 → 回退品牌徽章）
+    results.value.forEach(r => startFaviconTimer(r));
     searched.value = true;
     loading.value = false;
     // 后台并行：Worker 核验 + 浏览器侧可达性探测
@@ -357,7 +375,7 @@ function demo(h) { kw.value = h; doSearch(); }
                 <div v-else class="site-fallback">
                   <div class="fb-pattern"></div>
                   <div class="fb-badge">
-                    <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                    <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @load="onFaviconLoad(r)" @error="onFaviconErr(r)" />
                     <span v-else class="fb-brand">
                       <span class="fb-brand-icon">🎬</span>
                       <span class="fb-brand-name">{{ r.name }}</span>
@@ -395,7 +413,7 @@ function demo(h) { kw.value = h; doSearch(); }
                   <div v-else class="site-fallback">
                     <div class="fb-pattern"></div>
                     <div class="fb-badge">
-                      <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                      <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @load="onFaviconLoad(r)" @error="onFaviconErr(r)" />
                       <span v-else class="fb-brand">
                         <span class="fb-brand-icon">🎬</span>
                         <span class="fb-brand-name">{{ r.name }}</span>
