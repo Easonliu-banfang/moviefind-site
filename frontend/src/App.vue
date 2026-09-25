@@ -91,6 +91,7 @@ function makeCard(site, q) {
       : "无广告·免登录",
     statusCls: site.login === true ? "st-warn" : site.ads === true ? "st-muted" : "st-good",
     origin: site.origin,
+    favicon: site.favicon || null,
     searchUrl: buildSearchUrl(site, q),
     verified: false,
     needsCaptcha: !!site.captcha,
@@ -356,8 +357,11 @@ function demo(h) { kw.value = h; doSearch(); }
                 <div v-else class="site-fallback">
                   <div class="fb-pattern"></div>
                   <div class="fb-badge">
-                    <img v-if="!r._noFavicon" class="fb-icon" :src="r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
-                    <span v-else class="fb-mono">{{ monogram(r.name) }}</span>
+                    <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                    <span v-else class="fb-brand">
+                      <span class="fb-brand-icon">🎬</span>
+                      <span class="fb-brand-name">{{ r.name }}</span>
+                    </span>
                   </div>
                   <div class="fb-name">{{ r.name }}</div>
                   <div class="fb-sub">资源站</div>
@@ -391,8 +395,11 @@ function demo(h) { kw.value = h; doSearch(); }
                   <div v-else class="site-fallback">
                     <div class="fb-pattern"></div>
                     <div class="fb-badge">
-                      <img v-if="!r._noFavicon" class="fb-icon" :src="r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
-                      <span v-else class="fb-mono">{{ monogram(r.name) }}</span>
+                      <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                      <span v-else class="fb-brand">
+                        <span class="fb-brand-icon">🎬</span>
+                        <span class="fb-brand-name">{{ r.name }}</span>
+                      </span>
                     </div>
                     <div class="fb-name">{{ r.name }}</div>
                     <div class="fb-sub">资源站</div>
@@ -692,16 +699,20 @@ a { color: inherit; text-decoration: none; }
   object-fit: contain;
   border-radius: 6px;
 }
-/* monogram 回退（favicon 加载失败时）—— 大字标 + 站点名，看起来像品牌卡片 */
-.fb-mono {
-  font-family: var(--serif);
-  font-size: 40px; font-weight: 700;
-  line-height: 1;
-  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.6));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+/* 品牌徽章（无 favicon 时的精致回退）—— 影视图标 + 站点名，不像失败态 */
+.fb-brand {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+.fb-brand-icon {
+  font-size: 32px; line-height: 1;
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));
+}
+.fb-brand-name {
+  font-size: 11px; font-weight: 700;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: 0.3px;
+  max-width: 60px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 /* 站点名称 */
 .fb-name {
