@@ -67,15 +67,15 @@ function makeCard(site, q) {
   };
 }
 
-// 综合排序分（优先级：无广告 > 速度 > 清晰度 > 无人机验证 > 免登录）
+// 综合排序分（优先级：无广告 > 速度 > 清晰度 > 无人机验证 > 能用站 > 纯无确认片源）
 // 各档权重严格递减，确保高优先级档无论如何盖过低优先级档。
 function rankScore(r) {
   const noAds = r.ads === false ? 1_000_000 : 0;                            // 无广告：最高优先级
   const speed = r.latency_ms > 0 ? Math.max(0, 100000 - r.latency_ms) : 0;   // 速度：仅已测延迟参与，越快越高
   const quality = (r.qualityScore || 0) * 200;                              // 清晰度
   const noCaptcha = r.needsCaptcha ? 0 : 100;                               // 无人机验证 优先
-  const noLogin = r.login === false ? 40 : 0;                               // 免登录：要登录沉底
-  return noAds + speed + quality + noCaptcha + noLogin;
+  const usable = r.login === true ? 50 : 0;                                 // 需登录但能用的站，排在纯无确认片源之前
+  return noAds + speed + quality + noCaptcha + usable;
 }
 
 // 可见性：排除 服务端死站(dead) / 浏览器侧连不上(browserDead) / 用户手动隐藏(hidden)
@@ -84,21 +84,18 @@ function isVisible(r) {
 }
 
 const visibleCards = computed(() => results.value.filter(isVisible));
-// 已确认有片源（Worker 真的从站点抓到结果且无人机验证）→ 主按钮「立即播放」+ 次「搜该片」
+// 全部站点按 rankScore 排在一起：已确认有片源(✅)在前，其余（含需登录站）在后。
+// 需登录站不再单独分框，和其它站混排；其"需登录"只作为卡片上的标签。
 const verified = computed(() =>
   visibleCards.value
-    .filter((r) => r.verified && !r.needsCaptcha && !r.login)
+    .filter((r) => r.verified && !r.needsCaptcha)
     .sort((a, b) => rankScore(b) - rankScore(a) || a.latency_ms - b.latency_ms)
 );
-// 其余：被风控拦截 / SPA 站点 / 超时 —— 仍给出跳转，由用户浏览器去站内搜
+// 其余：未确认 / 风控拦截 / SPA / 超时 —— 仍给出跳转，由用户浏览器去站内搜（含需登录站）
 const others = computed(() =>
   visibleCards.value
-    .filter((r) => !(r.verified && !r.needsCaptcha) && !r.login)
+    .filter((r) => !(r.verified && !r.needsCaptcha))
     .sort((a, b) => rankScore(b) - rankScore(a) || a.name.localeCompare(b.name, "zh"))
-);
-// 需登录的站：永远放最后（用户要求）
-const loginList = computed(() =>
-  visibleCards.value.filter((r) => r.login === true).sort((a, b) => rankScore(b) - rankScore(a))
 );
 // 用户手动隐藏的站点
 const hiddenList = computed(() => results.value.filter((r) => hiddenIds.value.has(r.id)));
@@ -255,15 +252,11 @@ function demo(h) { kw.value = h; doSearch(); }
         <template v-else-if="searched && results.length">
           <div class="result-head">
             <h2>
-              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length + loginList.length }}</b> 个站点可达
+              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length }}</b> 个站点可达
               <span v-if="enhancing" class="enhancing">· 核验中…</span>
             </h2>
             <span class="result-sort">无广告 · 速度快 · 清晰度高 优先</span>
           </div>
-
-          <p v-if="!enhancing && verified.length === 0" class="hint-note">
-            说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
-          </p>
 
           <!-- 已确认有片源 -->
           <ol class="result-list" v-if="verified.length">
@@ -293,7 +286,6 @@ function demo(h) { kw.value = h; doSearch(); }
           <div v-if="others.length" class="others">
             <button class="others-toggle" @click="showOthers = !showOthers">
               {{ showOthers ? "▾" : "▸" }} 其余 {{ others.length }} 个站点（点击去站内搜索）
-              <span class="others-note">部分站点对机房IP风控 / 为JS渲染，由你浏览器打开后搜</span>
             </button>
             <ol class="result-list" v-if="showOthers">
               <li v-for="(r, i) in others" :key="r.id" class="card neutral" :class="{ locked: r.needsCaptcha }">
@@ -319,35 +311,6 @@ function demo(h) { kw.value = h; doSearch(); }
             </ol>
           </div>
 
-          <!-- 需登录的站点：永远放最后（搜索无需登录→照常核验，仅观看需登录） -->
-          <div v-if="loginList.length" class="login-area">
-            <div class="login-head">🔒 以下 {{ loginList.length }} 个站点仅观看需登录（排最后，但搜索 / 核验照常）</div>
-            <ol class="result-list">
-              <li v-for="(r, i) in loginList" :key="r.id" class="card neutral login" :class="{ ok: r.verified }">
-                <div class="rank" :class="{ top: r.verified }">{{ r.verified ? '✅' : (i + 1) }}</div>
-                <div class="card-body">
-                  <div class="card-top">
-                    <span class="site-name">{{ r.name }}</span>
-                    <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                    <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
-                    <span class="st-tag st-warn">需登录</span>
-                    <span v-if="r.verified" class="ok-badge">✅ 已确认</span>
-                    <span v-if="r.verified" class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
-                    <span v-if="enhancing && !r.verified" class="v-spin" title="正在核验该站是否有片源"></span>
-                    <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
-                  </div>
-                  <div v-if="r.verified && r.title" class="card-title">匹配：{{ r.title }}</div>
-                  <p class="card-tip" v-else-if="r.verified">该站已确认有片源 · 可直接播放，但观看前需先登录</p>
-                  <p class="card-tip" v-else>该站搜索无需登录即可核验片源；观看需注册 / 登录，打开后登录再播</p>
-                </div>
-                <div class="card-actions">
-                  <a v-if="r.verified && r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
-                  <a class="go ghost" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-                </div>
-              </li>
-            </ol>
-          </div>
-
           <!-- 用户手动隐藏的站点：恢复入口 -->
           <div v-if="hiddenList.length" class="hidden-area">
             <div class="hidden-head">已手动隐藏 {{ hiddenList.length }} 个站点（你被封 / 不想看到）</div>
@@ -358,7 +321,7 @@ function demo(h) { kw.value = h; doSearch(); }
           </div>
         </template>
 
-        <p v-else-if="searched && verified.length + others.length + loginList.length === 0" class="hint empty">
+        <p v-else-if="searched && verified.length + others.length === 0" class="hint empty">
           🙅 暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
         </p>
 
@@ -469,11 +432,9 @@ a { color: inherit; text-decoration: none; }
 .enhancing::before { content: ""; width: 11px; height: 11px; border: 2px solid #2f3646; border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .result-sort { color: var(--muted); font-size: 12px; }
-.hint-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: var(--panel); border: 1px solid #232836; border-radius: 12px; }
-.hint-note b { color: var(--text); }
 
 .result-list { list-style: none; display: flex; flex-direction: column; gap: 10px; animation: listIn .45s cubic-bezier(.2,.7,.3,1) both; }
-.others, .login-area { animation: listIn .45s cubic-bezier(.2,.7,.3,1) both; }
+.others { animation: listIn .45s cubic-bezier(.2,.7,.3,1) both; }
 @keyframes listIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .card {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px;
@@ -523,12 +484,6 @@ a { color: inherit; text-decoration: none; }
 .others { margin-top: 16px; }
 .others-toggle { width: 100%; text-align: left; cursor: pointer; background: transparent;
   border: 1px dashed #2f3646; color: var(--text); border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600; }
-.others-note { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 4px; }
-
-.login-area { margin-top: 16px; }
-.login-head { color: #c9a86a; font-size: 13px; font-weight: 600; margin: 0 4px 10px; }
-.card.login { opacity: .82; }
-.card.login:hover { opacity: 1; }
 
 .hidden-area { margin-top: 16px; padding: 12px 14px; background: var(--panel); border: 1px dashed #2f3646; border-radius: 12px; }
 .hidden-head { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
