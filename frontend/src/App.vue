@@ -46,6 +46,15 @@ function wellStyle(id) {
 }
 function monogram(name) { return (name || "?").trim().charAt(0); }
 
+// 站点 favicon 回退链：favicon.ico → apple-touch-icon → 首字 monogram
+function getFavicon(origin) {
+  if (!origin) return null;
+  try { return new URL("/favicon.ico", origin).href; } catch { return origin + "/favicon.ico"; }
+}
+function onFaviconErr(r) {
+  r._noFavicon = true;
+}
+
 function qualityClass(q) {
   const map = { "4K": "q-4k", "蓝光": "q-bd", "1080P": "q-hd", "720P": "q-hd", "高清": "q-hd", "HD": "q-hd" };
   return map[q] || "q-uhd";
@@ -334,7 +343,15 @@ function demo(h) { kw.value = h; doSearch(); }
             <a v-for="(r, i) in verified" :key="r.id" class="card ok" :href="r.pageUrl || r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
               <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
                 <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.title || r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
-                <span v-else class="well-char">{{ monogram(r.name) }}</span>
+                <div v-else class="site-fallback">
+                  <div class="fb-pattern"></div>
+                  <div class="fb-badge">
+                    <img v-if="!r._noFavicon" class="fb-icon" :src="getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                    <span v-else class="fb-mono">{{ monogram(r.name) }}</span>
+                  </div>
+                  <div class="fb-name">{{ r.name }}</div>
+                  <div class="fb-sub">资源站</div>
+                </div>
                 <span class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
                 <span class="play-overlay">▶</span>
               </div>
@@ -361,7 +378,15 @@ function demo(h) { kw.value = h; doSearch(); }
               <a v-for="(r, i) in others" :key="r.id" class="card neutral" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
                 <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
                   <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
-                  <span v-else class="well-char">{{ monogram(r.name) }}</span>
+                  <div v-else class="site-fallback">
+                    <div class="fb-pattern"></div>
+                    <div class="fb-badge">
+                      <img v-if="!r._noFavicon" class="fb-icon" :src="getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                      <span v-else class="fb-mono">{{ monogram(r.name) }}</span>
+                    </div>
+                    <div class="fb-name">{{ r.name }}</div>
+                    <div class="fb-sub">资源站</div>
+                  </div>
                   <span class="rank">{{ verified.length + i + 1 }}</span>
                   <span class="play-overlay">▶</span>
                 </div>
@@ -609,7 +634,82 @@ a { color: inherit; text-decoration: none; }
   place-items: center;
 }
 .poster-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.well-char { font-family: var(--serif); font-size: 48px; font-weight: 700; line-height: 1; }
+
+/* 站点图标回退卡片 */
+.site-fallback {
+  position: relative;
+  width: 100%; height: 100%;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; padding: 16px;
+  z-index: 1;
+}
+/* 装饰网格纹理背景 */
+.fb-pattern {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 16px 16px;
+  z-index: 0;
+}
+/* 图标徽章：圆形容器 + 渐变描边 + 光晕 */
+.fb-badge {
+  position: relative;
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,255,255,0.15);
+  display: grid; place-items: center;
+  overflow: hidden;
+  box-shadow:
+    0 0 0 3px rgba(0,0,0,0.2),
+    0 8px 24px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.1);
+}
+.fb-badge::before {
+  content: "";
+  position: absolute; inset: -2px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0%, rgba(255,255,255,0.1) 25%, transparent 50%);
+  z-index: -1;
+  animation: fbRotate 6s linear infinite;
+}
+@keyframes fbRotate { to { transform: rotate(360deg); } }
+/* favicon 图片 */
+.fb-icon {
+  width: 42px; height: 42px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+/* monogram 回退（favicon 加载失败时） */
+.fb-mono {
+  font-family: var(--serif);
+  font-size: 32px; font-weight: 700;
+  line-height: 1;
+  color: rgba(255,255,255,0.85);
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+/* 站点名称 */
+.fb-name {
+  font-size: 13px; font-weight: 700;
+  color: rgba(255,255,255,0.9);
+  text-align: center;
+  letter-spacing: 0.3px;
+  max-width: 120px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 副标题标签 */
+.fb-sub {
+  font-size: 9px; font-weight: 600;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.15);
+}
 .rank {
   position: absolute; top: 6px; left: 6px;
   min-width: 22px; height: 22px; padding: 0 6px;
