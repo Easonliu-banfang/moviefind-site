@@ -304,9 +304,10 @@ function demo(h) { kw.value = h; doSearch(); }
                     <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
                     <span class="q-tag nominal" title="站点标称画质，仅供参考">标称</span>
                     <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
-                    <span v-if="r.needsCaptcha" class="cap-badge">🔒 去站里搜</span>
-                    <span v-else class="web-badge">🌐 去站里搜</span>
-                    <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
+                  <span v-if="r.needsCaptcha" class="cap-badge">🔒 去站里搜</span>
+                  <span v-else class="web-badge">🌐 去站里搜</span>
+                  <span v-if="enhancing && !r.verified" class="v-spin" title="正在核验该站是否有片源"></span>
+                  <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
                   </div>
                   <p class="card-tip" v-if="r.needsCaptcha">该站有人机验证/风控，跳转后请先通过再搜该片</p>
                   <p class="card-tip" v-else>点「搜该片」直达该站已搜《{{ kw }}》的结果页，打开即能播放</p>
@@ -318,24 +319,30 @@ function demo(h) { kw.value = h; doSearch(); }
             </ol>
           </div>
 
-          <!-- 需登录的站点：永远放最后 -->
+          <!-- 需登录的站点：永远放最后（搜索无需登录→照常核验，仅观看需登录） -->
           <div v-if="loginList.length" class="login-area">
-            <div class="login-head">🔒 以下 {{ loginList.length }} 个站点需先登录才能观看（排最后）</div>
+            <div class="login-head">🔒 以下 {{ loginList.length }} 个站点仅观看需登录（排最后，但搜索 / 核验照常）</div>
             <ol class="result-list">
-              <li v-for="(r, i) in loginList" :key="r.id" class="card neutral login">
-                <div class="rank">{{ i + 1 }}</div>
+              <li v-for="(r, i) in loginList" :key="r.id" class="card neutral login" :class="{ ok: r.verified }">
+                <div class="rank" :class="{ top: r.verified }">{{ r.verified ? '✅' : (i + 1) }}</div>
                 <div class="card-body">
                   <div class="card-top">
                     <span class="site-name">{{ r.name }}</span>
                     <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                    <span class="q-tag nominal" title="站点标称画质，仅供参考">标称</span>
+                    <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
                     <span class="st-tag st-warn">需登录</span>
+                    <span v-if="r.verified" class="ok-badge">✅ 已确认</span>
+                    <span v-if="r.verified" class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
+                    <span v-if="enhancing && !r.verified" class="v-spin" title="正在核验该站是否有片源"></span>
                     <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
                   </div>
-                  <p class="card-tip">该站需注册 / 登录后才能播放，点「去站里搜」打开后登录再搜《{{ kw }}》</p>
+                  <div v-if="r.verified && r.title" class="card-title">匹配：{{ r.title }}</div>
+                  <p class="card-tip" v-else-if="r.verified">该站已确认有片源 · 可直接播放，但观看前需先登录</p>
+                  <p class="card-tip" v-else>该站搜索无需登录即可核验片源；观看需注册 / 登录，打开后登录再播</p>
                 </div>
                 <div class="card-actions">
-                  <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">去站里搜 ↗</a>
+                  <a v-if="r.verified && r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
+                  <a class="go ghost" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
                 </div>
               </li>
             </ol>
@@ -497,6 +504,7 @@ a { color: inherit; text-decoration: none; }
 .q-tag.nominal { background: #232836; color: var(--muted); border-color: #2f3646; }
 .hide-btn { margin-left: auto; width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #2f3646; background: transparent; color: var(--muted); border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1; transition: .2s; }
 .hide-btn:hover { color: var(--danger); border-color: var(--danger); }
+.v-spin { width: 13px; height: 13px; border: 2px solid #2f3646; border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
 .st-tag { font-size: 11px; padding: 2px 7px; border-radius: 999px; font-weight: 700; border: 1px solid transparent; }
 .st-tag.st-good { background: #16331f; color: #55e6a3; border-color: #245c38; }
 .st-tag.st-muted { background: #2a2620; color: #c9a86a; border-color: #4a3d28; }
