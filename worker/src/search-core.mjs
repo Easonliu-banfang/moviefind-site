@@ -291,7 +291,7 @@ export async function probeSite(site, kw) {
   const target = searchUrl;
   const start = Date.now();
   const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
-    latency_ms: 0, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false };
+    latency_ms: 0, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false };
   try {
     const res = await fetch(target, {
       headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "zh-CN" },
@@ -304,7 +304,8 @@ export async function probeSite(site, kw) {
       if (parsed.has) {
         const p = parsed;
         return { ...base, quality: p.liveQuality || site.quality, qualityScore: p.liveScore || site.qualityScore,
-          latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, verified: true };
+          latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, verified: true,
+          realQuality: !!(p.liveQuality) };
       }
       return base; // 200 但无结果/SPA → 仍交给浏览器去搜
     }
