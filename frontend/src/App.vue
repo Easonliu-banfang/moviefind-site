@@ -547,7 +547,7 @@ a { color: inherit; text-decoration: none; }
 .back:hover { border-color: var(--accent); color: var(--accent); }
 .topbar .search { margin: 0; flex: 1; }
 
-.content { flex: 1; width: 100%; max-width: 820px; margin: 0 auto; padding: 18px 16px 0; }
+.content { flex: 1; width: 100%; max-width: 1600px; margin: 0 auto; padding: 18px 16px 0; }
 .hint { color: var(--muted); text-align: center; padding: 34px 0; font-size: 14px; }
 .hint.error { color: var(--danger); }
 
