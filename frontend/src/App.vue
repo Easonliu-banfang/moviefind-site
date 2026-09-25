@@ -79,7 +79,10 @@ function makeCard(site, q) {
     browserDead: false,           // 浏览器侧（用户自己的网络）连不上 → 自动隐藏
     pageUrl: null,
     title: null,
-    poster: null,             // 电影封面（Worker 实测抓到的海报 URL；无则为 null → 回退 monogram 井）
+    poster: null,             // 电影封面（Worker 抓到的海报 URL；无则为 null → 回退 monogram 井）
+    posterCand: [],          // 备用封面候选（站点自己页面里解析出的其他海报图）
+    _plan: [],              // 封面回退序列：[直链, Worker代取, 直链, 代取, ...]，见 buildPosterPlan
+    _pi: 0,                 // 当前回退序列下标
     latency_ms: 0,
   };
 }
@@ -141,6 +144,9 @@ async function enhanceWithWorker(q) {
         card.pageUrl = w.pageUrl || null;
         card.title = w.title || null;
         card.poster = w.poster || null;   // Worker 实测封面；没有则保持 null（显示 monogram 井）
+        if (w.posterCand && w.posterCand.length) card.posterCand = w.posterCand; // 备用封面候选
+        card._plan = buildPosterPlan(card.poster, card.posterCand); // 直链→代取 的失败回退序列
+        card._pi = 0;
         card.latency_ms = w.latency_ms || 0;
       }
     }
@@ -149,6 +155,33 @@ async function enhanceWithWorker(q) {
   } finally {
     enhancing.value = false;
   }
+}
+
+// ===== 封面失败回退 =====
+// 封面 URL 全部来自各站点自己的页面。加载失败的主要成因是图床防盗链：
+//   浏览器跨站加载 <img> 时 Referer 是本站（github.io），doubanio 直接 418/403、部分图床按 IP 拦。
+// 对策：每张图给两次机会 —— 先浏览器直链，失败后走 Worker 代取（Worker 带图床同源 Referer，
+//   实测 doubanio 从 418 变 200）。候选图依次类推；全试完才回退 monogram 井。
+// 注意：不引入任何第三方图片源，代取的仍是站点自己的海报字节。
+function buildPosterPlan(raw, cands) {
+  const uniq = [];
+  for (const u of [raw, ...(Array.isArray(cands) ? cands : [])]) {
+    if (u && typeof u === "string" && /^https?:\/\//i.test(u) && !uniq.includes(u)) uniq.push(u);
+  }
+  const plan = [];
+  for (const u of uniq.slice(0, 3)) plan.push(u, `${WORKER_BASE}/api/img?u=${encodeURIComponent(u)}`);
+  return plan;
+}
+
+// <img> 加载失败 → 沿回退序列前进一格；序列走完才清空封面（显示 monogram 井）
+function onPosterErr(r) {
+  const plan = Array.isArray(r._plan) ? r._plan : [];
+  if (!plan.length) { r.poster = null; return; }
+  let i = typeof r._pi === "number" ? r._pi : plan.indexOf(r.poster);
+  if (i < 0) i = 0;
+  i += 1;
+  r._pi = i;
+  r.poster = i < plan.length ? plan[i] : null;
 }
 
 // 浏览器侧可达性探测：用 no-cors 请求各站搜索页。
@@ -299,7 +332,7 @@ function demo(h) { kw.value = h; doSearch(); }
           <ol class="result-list" v-if="verified.length">
             <li v-for="(r, i) in verified" :key="r.id" class="card ok" :style="{ animationDelay: (i * 0.04) + 's' }">
               <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
-                <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="r.poster = null" />
+                <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
                 <span v-else class="well-char">{{ monogram(r.name) }}</span>
                 <span class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
               </div>
@@ -333,7 +366,7 @@ function demo(h) { kw.value = h; doSearch(); }
             <ol class="result-list" v-if="showOthers">
               <li v-for="(r, i) in others" :key="r.id" class="card neutral" :class="{ locked: r.needsCaptcha }" :style="{ animationDelay: (verified.length * 0.04 + i * 0.03) + 's' }">
                 <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
-                  <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="r.poster = null" />
+                  <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
                   <span v-else class="well-char">{{ monogram(r.name) }}</span>
                   <span class="rank">{{ verified.length + i + 1 }}</span>
                 </div>

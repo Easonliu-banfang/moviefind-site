@@ -4,9 +4,13 @@
  *
  * 端点:
  *   GET /api/search?q=<关键词>[&max=<数量>]  → 聚合搜索，返回有片源站点，延迟升序
+ *   GET /api/img?u=<图片URL>                 → 封面代取（击穿图床防盗链，图片仍是站点自己的图）
  *   GET /api/sites                          → 站点清单
+ *   GET /api/poster?q=<关键词>[&site=<id>]   → 封面诊断（逐站看从自身 HTML 解析到的海报）
+ *   GET /api/probe?q=<关键词>                → 逐站可达性诊断
+ *   GET /api/find?q=<关键词>[&site=<id>]     → 全模板诊断
  */
-import { run, SITES, probeSiteDebug, findTemplates, poolLimit, MAX_CONCURRENT } from "./search-core.mjs";
+import { run, SITES, probeSiteDebug, findTemplates, probeSite, poolLimit, MAX_CONCURRENT, UA } from "./search-core.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +22,53 @@ const j = (obj, status = 200) => new Response(JSON.stringify(obj), {
   headers: { "Content-Type": "application/json", ...CORS },
 });
 
+// ===== 封面代取（防盗链兜底）=====
+// 实测：不少图床开防盗链，浏览器跨站加载 <img> 时 Referer 是本站（github.io），图床直接 403/418，
+// 表现为「解析出了海报 URL，前端却显示不出来」。实测 doubanio 无 Referer 是 418、同源 Referer 立刻 200。
+// 这里由 Worker 代取：带上图床自己的同源 Referer，再把字节返回给浏览器。
+// 图片本身仍是各站点自己的海报，只是换了个可信 Referer —— 不引入任何第三方图源。
+// 白名单：33 站自身域名 + 已知海报 CDN + 路径像海报位的资源；其余一律 403，避免被当成通用代理滥用。
+const SITE_HOSTS = new Set(SITES.map(s => { try { return new URL(s.origin).hostname; } catch { return ""; } }).filter(Boolean));
+const POSTER_CDN_RE = /^(?:.*\.)?(?:doubanio|iqiyipic|qiyipic|picbf|feisuimg|wsyzy|yingk|hitv|bimg|bfzy|tmdb|dbokutv|zhuiying|img|pic)\S*$/i;
+const POSTER_PATH_RE = /\/(?:upload\/vod|upload\/|vod|image|pic|poster|thumb)\b/i;
+
+function posterAllowed(u) {
+  if (!u || u.length > 400 || !/^https?:\/\//i.test(u)) return false;
+  let x;
+  try { x = new URL(u); } catch { return false; }
+  if (!x.hostname || x.hostname.includes("@") || x.hostname.startsWith("localhost") || /^127\.|^\d+\.\d+\.\d+\.\d+$/.test(x.hostname)) return false;
+  if (SITE_HOSTS.has(x.hostname) || POSTER_CDN_RE.test(x.hostname)) return true;
+  return POSTER_PATH_RE.test(u);
+}
+
+async function imgProxy(u) {
+  if (!posterAllowed(u)) return j({ ok: false, error: "not allowed" }, 403);
+  const host = new URL(u).hostname;
+  const res = await fetch(u, {
+    headers: {
+      "User-Agent": UA,
+      "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      "Accept-Language": "zh-CN,zh;q=0.9",
+      "Referer": "https://" + host + "/",   // 同源 Referer：击穿 doubanio 等防盗链的关键
+    },
+    signal: AbortSignal.timeout(12000),
+    redirect: "follow",
+  });
+  if (!res.ok) return j({ ok: false, http: res.status }, 502);
+  const ct = res.headers.get("content-type") || "";
+  // 只转发图片：避免本端点被当成通用反向代理去取任意网页（路径白名单只是第一道闸）
+  if (!/^image\//i.test(ct)) return j({ ok: false, error: "not an image", ct: ct.slice(0, 60) }, 502);
+  return new Response(res.body, {
+    status: 200,
+    headers: {
+      ...CORS,
+      "Content-Type": ct,
+      "Cache-Control": "public, max-age=86400, s-maxage=86400",
+    },
+  });
+}
+
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -27,6 +78,13 @@ export default {
     const proxyBase = (env && (env.PROXY_BASE || env.PROXY_BASE_URL || "")) || "";
 
     try {
+      // 封面代取：浏览器直链被防盗链拦截时由 Worker 带同源 Referer 代取（图片仍是站点自己的图）
+      if (url.pathname === "/api/img") {
+        const u = url.searchParams.get("u") || "";
+        try { return await imgProxy(u); }
+        catch (e) { return j({ ok: false, error: String(e).slice(0, 120) }, 502); }
+      }
+
       if (url.pathname === "/api/search") {
         const q = (url.searchParams.get("q") || "").trim();
         if (!q) return j({ ok: false, error: "缺少 q 参数" }, 400);
@@ -36,6 +94,28 @@ export default {
       }
       if (url.pathname === "/api/sites") {
         return j({ ok: true, sites: SITES.map(s => ({ id: s.id, name: s.name, origin: s.origin, quality: s.quality })) });
+      }
+      if (url.pathname === "/api/poster") {
+        // 封面诊断：封面一律只取自站点自身 HTML（不接任何第三方图片搜索）。
+        // ?q=关键词&site=id1,id2 —— 指定站；不传 site 则跑全部站。
+        // 返回每个站从自己页面里解析到的 title / poster / posterCand，便于逐站核对。
+        const q = (url.searchParams.get("q") || "").trim();
+        if (!q) return j({ ok: false, error: "缺少 q 参数" }, 400);
+        const want = (url.searchParams.get("site") || "").split(",").map(s => s.trim()).filter(Boolean);
+        const sites = want.length ? SITES.filter(s => want.includes(s.id)) : SITES;
+        const results = [];
+        await poolLimit(sites, MAX_CONCURRENT, async (site) => {
+          const r = await probeSite(site, q, proxyBase);
+          results.push({
+            id: r.id, name: r.name, verified: !!r.verified, dead: !!r.dead,
+            blocked: !!r.blocked, title: r.title || null,
+            poster: r.poster || null, posterCand: r.posterCand || [],
+            posterGuess: !!r.posterGuess, latency_ms: r.latency_ms, err: r.err || null,
+            searchUrl: r.searchUrl,
+          });
+        });
+        results.sort((a, b) => (a.verified === b.verified ? 0 : a.verified ? -1 : 1));
+        return j({ ok: true, q, source: "site-native", ts: Date.now(), results });
       }
       if (url.pathname === "/api/probe") {
         const q = (url.searchParams.get("q") || "狂飙").trim();

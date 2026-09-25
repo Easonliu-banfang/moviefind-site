@@ -146,44 +146,159 @@ function abs(path, origin) {
   return origin.replace(/\/+$/, "") + (path.startsWith("/") ? path : "/" + path);
 }
 
-// 从一段 HTML 片段里取「电影封面」：优先 data-src / data-original（懒加载），其次 src。
-// 过滤 favicon / logo / 1x1 / .ico，避免把站标当封面。返回绝对地址。
-function firstPoster(scope, origin) {
-  if (!scope) return null;
-  const tags = [...scope.matchAll(/<img\b[^>]*>/gi)];
-  for (const t of tags) {
+// ===== 封面（海报）提取 =====
+// 真图常写在懒加载属性里，src 往往是占位图 → 按优先级逐个属性尝试
+const IMG_SRC_ATTRS = ["data-original", "data-src", "data-lazy-src", "data-lazy", "data-echo",
+  "data-url", "data-lazyload", "data-cfsrc", "data-actualsrc", "src2", "src"];
+// 懒加载属性匹配器（一次性编译，复用）
+const LAZY_ATTR_RE = IMG_SRC_ATTRS.map(a => new RegExp(`\\b${a}\\s*=\\s*(["'])(.*?)\\1`, "i"));
+// 只在这几类「可能承载封面」的标签里找图。
+// 关键：苹果CMS/mytheme 主题的封面根本不在 <img> 里，而是
+//   <a class="myui-vodlist__thumb lazyload" href="/voddetail/3379.html" title="狂飙" data-original="https://...jpg">
+// 所以必须扫全部媒体类标签，不能只扫 <img>。
+const MEDIA_TAGS_RE = /<(?:img|a|span|div|li|p|b|i|em|strong|figure|source|td|dt|dd)\b[^>]*>/gi;
+// 站标 / 加载动画 / 广告位 / 二维码 / 表情 CDN —— 绝不能当封面
+const IMG_NOISE_RE = /favicon|\blo\.gif|\/logo\b|logo[-_./]|icon-|loading|load\.(gif|png|webp|svg)|cebianlan|banner|advert|\/ads?\b|qrcode|qr[-_.]|\/static\/|\/site\/|placeholder|qpic\.cn|bqimg\.com|gpimg\.cn|gtimg\.cn|qlog\.cn/i;
+// 只认图片资源：扫全部标签后挡掉误扫到的 <script>/<link> 的 js/css 地址
+const NON_IMG_RE = /\.(?:js|css|xml|json|woff2?|ttf|otf|eot|webmanifest|mp3|mp4|flv|m3u8)(?:\?|$)/i;
+// 路径像片库的图（可信度高）
+const POSTER_HINT_RE = /\/upload\/vod|\/upload\/|\/vod\b|\/image\b|\/pic\b|\/poster|iqiyipic|tmdb|doubanio|vodpic|bimg\.com|zhuiying|img\.bfzy/i;
+// 锚点自身带图（懒加载属性 / 内含 <img> / class 是封面位）→ 它的 title 属性就是这张图的标签（片名）
+const THUMB_HINT_RE = /myui-vodlist__thumb|v-thumb|lazyload|thumb|pic|poster|cover/i;
+
+function decodeImgPath(p) {
+  return ((p || "").trim().replace(/^["']+|["']+$/g, ""))
+    .replace(/&quot;/g, '"').replace(/&#x2F;|&#47;|\\u002f/gi, "/").replace(/&amp;/g, "&");
+}
+
+// 图片 URL 规整：转绝对 + http→https 升级
+//（https 页面加载 http 图片会被浏览器当「混合内容」直接拦截，表现为「封面不显示」）
+function normImgUrl(p, origin) {
+  const u = decodeImgPath(p);
+  if (!u || u.startsWith("data:")) return null;
+  if (/\.(svg|ico)(\?|$)/i.test(u) || IMG_NOISE_RE.test(u) || NON_IMG_RE.test(u)) return null;
+  if (u.length > 170) return null;   // 海报 URL 都很短；超长基本是带签名的临时资源（广告 / banner）
+  const a = abs(u, origin);
+  if (!a) return null;
+  return /^http:\/\//i.test(a) ? "https://" + a.slice(7) : a;
+}
+
+// 标签自身的「图名」：alt 优先，其次 title（mytheme 封面锚点用 title 携带片名）
+function tagLabel(tag) {
+  const m = tag.match(/\b(?:alt|title)\s*=\s*["']([^"']*)["']/i);
+  return m ? m[1].replace(/\s+/g, " ").trim() : "";
+}
+
+// 锚点是否「自带图」：带懒加载属性 / 内含 <img> / class 是封面位
+// → 这类锚点的 title 属性是图片标签（片名），不是「在线观看」之类导航噪声
+export function isMediaAnchor(tag) {
+  return /<img\b/i.test(tag) || THUMB_HINT_RE.test(tag) || LAZY_ATTR_RE.some(re => re.test(tag));
+}
+
+// 收集一段 HTML 里「最像本片海报」的候选图，按可信度排序去重。
+// 来源①：所有媒体类标签上的懒加载属性；来源②：CSS background:url()（黑夜影院等把封面写在背景里）。
+// hints：片名/关键词数组。候选图的 alt 或 title 命中其中任一项 → +100（最强信号，位置无关）。
+function collectPosterCands(scope, origin, hints) {
+  if (!scope) return [];
+  const hintArr = (Array.isArray(hints) ? hints : hints ? [hints] : []).filter(Boolean);
+  const cands = [], seen = new Set();
+  const push = (u, label, fromBg) => {
+    const nu = normImgUrl(u, origin);
+    if (!nu || seen.has(nu)) return;
+    seen.add(nu);
+    let score = 0;
+    if (label) {
+      const lab = label.toLowerCase();
+      for (const h of hintArr) { if (h && lab.includes(h.toLowerCase())) { score += 100; break; } }
+    }
+    if (POSTER_HINT_RE.test(nu)) score += 40;   // 路径像片库
+    if (fromBg) score += 10;                    // CSS 背景图通常是海报位
+    if (/\.gif(\?|$)/i.test(nu)) score -= 200;  // 动图不作封面
+    cands.push({ url: nu, label, score });
+  };
+  for (const t of [...scope.matchAll(MEDIA_TAGS_RE)]) {
     const tag = t[0];
-    const ds = tag.match(/\b(?:data-src|data-original|data-lazy-src|data-lazy)\s*=\s*"([^"]+)"/i);
-    const s = tag.match(/\bsrc\s*=\s*"([^"]+)"/i);
-    const src = (ds && ds[1]) || (s && s[1]) || null;
-    if (!src) continue;
-    if (src.startsWith("data:") || /\.ico(\?|$)/i.test(src)) continue;
-    if (/favicon|logo\b|icon-/i.test(src)) continue;
-    return abs(src, origin);
+    const label = tagLabel(tag);
+    for (const re of LAZY_ATTR_RE) {
+      const m = tag.match(re);
+      if (m) { push(m[2], label, false); break; }
+    }
   }
-  return null;
+  for (const b of [...scope.matchAll(/background(?:-image)?\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/gi)]) {
+    push(b[1], "", true);
+  }
+  cands.sort((x, y) => y.score - x.score);
+  return cands;
 }
 
-// 清理片名后缀噪声（封面图片 / 海报 等）
+// 首选封面 URL（兼容原调用方式）
+function firstPoster(scope, origin, hints) {
+  const c = collectPosterCands(scope, origin, hints);
+  return c[0] ? c[0].url : null;
+}
+
+// 综合封面提取，分层回退（每层都比下层可信）：
+// 1) 结果卡片窗口内有正分候选 —— 封面通常就在结果卡的懒加载属性里
+// 2) 全页「alt/title 与片名一致」交叉匹配 —— 封面在结果卡外层、或整页共用一个列表时命中
+// 3) 全页其他正分候选（路径像片库）
+// 4) 结果窗口内剩余弱候选
+function bestPoster(html, href, origin, hints) {
+  const i0 = href ? html.indexOf(href) : -1;
+  const win = i0 >= 0
+    ? collectPosterCands(html.slice(Math.max(0, i0 - 400), Math.min(html.length, i0 + 1600)), origin, hints)
+    : [];
+  const all = collectPosterCands(html, origin, hints);
+  const take = cands => ({ poster: cands[0].url, posterCand: cands.map(x => x.url).slice(0, 5) });
+  if (win.some(c => c.score > 0)) return take(win);
+  const strong = all.filter(c => c.score >= 100);
+  if (strong.length) return take(strong);
+  const any = all.filter(c => c.score > 0);
+  if (any.length) return take(any);
+  if (win.length) return take(win);
+  return { poster: null, posterCand: [] };
+}
+
+// ===== 封面一律只取自站点自身 HTML =====
+// 不接任何第三方图片搜索（Bing/百度/DDG 等）：用户要求封面必须是网站自己的图。
+// 站点是 JS 渲染、服务端只拿到空壳页时，就不给封面（前端回退 monogram 井），而不是拿别处的图凑数。
+
+// 清理片名噪声：结果卡里常把评分/集数/画质/地区/年份和片名挤在同一个可见文本里
+//（如「8.8 分 狂飙」「已完结 狂飙 2023 / 内地」「654 6.5 HD F1：狂飙」「8.0 HD+137版 流浪地球」），剥掉才好用。
+// 注意别误删片名本身的年份/序号，所以年份只作为「开头」的噪声剥掉。
+const TITLE_LEAD_NOISE = /^(?:\d+(?:\.\d+)?\s*(?=[A-Za-z])|\d+(?:\.\d+)?\s*分|\d{3,4}\s*(?=[^\d])|\d{2,4}\s*集|全部?\d*\s*集|已完结|正片|高清|超清|蓝光|4\s*k|fhd|uhd|hd\+?\s*\d*\s*版?|hd|1080\s*p|720\s*p|未删减|中字|国配|国语|粤语|bf|修复|f\d+)\s*[：:·、,，\-—·+]*/i;
+const TITLE_TAIL_NOISE = /[：:·、,，\-—·]?\s*(?:全部?\d*\s*集|已完结|正片|高清|超清|蓝光|hd\+?\s*\d*\s*版?|hd|1080\s*p|720\s*p|中字|未删减|bf)\s*$/i;
+const TITLE_TAIL_META = /\s*[/／]\s*(?:中国大陆|中国内地|内地|中国|大陆|美国|日本|韩国|台湾|香港|泰国|印度|法国|英国|西班牙|德国)\s*$/i;
+
 function cleanTitle(t) {
-  return ((t || "").replace(/(封面图片|海报图片|封面|海报|图片)$/, "").trim()) || null;
+  let s = ((t || "").replace(/(封面图片|海报图片|封面|海报|图片)$/, "").replace(/\s+/g, " ")).trim();
+  let prev;
+  do { prev = s; s = s.replace(TITLE_LEAD_NOISE, "").replace(TITLE_TAIL_NOISE, "").replace(TITLE_TAIL_META, "").trim(); } while (s !== prev);
+  s = s.replace(/[：:·、,，\-—·]\s*$/, "").trim();
+  return s || null;
 }
 
-// 提取标题：优先取「含关键词」的来源（可见文字 或 图片 alt/title），避免把角标「短剧/全64集/正片」误当片名；
-// 其次取链接附近含关键词的 <h1-4>（仅限该结果项周边，不取页面级标题）。
-function extractTitle(html, href, innerHtml, kwSafe) {
+// 提取标题：优先取「含关键词」的来源（可见文字 / 图片 alt 或 title / 封面位锚点自身的 title），
+// 避免把角标「短剧/全64集/正片」误当片名；其次取链接附近含关键词的 <h1-4>（仅限该结果项周边）。
+// 第 3 种来源针对 mytheme：封面锚点 <a class="myui-vodlist__thumb lazyload" title="狂飙" data-original="...">
+// 的内文只有角标 <span>，片名写在锚点自身 title 上。
+function extractTitle(html, tag, innerHtml, kwSafe) {
+  let txt = "", alt = "";
   if (innerHtml) {
-    const txt = innerHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    txt = innerHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     const imgM = innerHtml.match(/\b(?:alt|title)="([^"]*)"/i);
-    const alt = imgM && imgM[1].trim();
-    // 优先含关键词的来源
-    if (txt && txt.includes(kwSafe)) return cleanTitle(txt.slice(0, 40));
-    if (alt && alt.includes(kwSafe)) return cleanTitle(alt.slice(0, 40));
-    if (txt) return cleanTitle(txt.slice(0, 40));
-    if (alt) return cleanTitle(alt.slice(0, 40));
+    alt = imgM ? imgM[1].trim() : "";
   }
-  if (href) {
-    const idx = html.indexOf(href);
+  const own = tag ? (tag.match(/\btitle\s*=\s*["']([^"']*)["']/i) || [])[1] : "";
+  const ownTitle = own ? own.trim() : "";
+  // 含关键词的来源优先
+  if (txt && txt.includes(kwSafe)) return cleanTitle(txt.slice(0, 40));
+  if (alt && alt.includes(kwSafe)) return cleanTitle(alt.slice(0, 40));
+  if (ownTitle && ownTitle.includes(kwSafe)) return cleanTitle(ownTitle.slice(0, 40));
+  // 不含关键词的兜底来源
+  if (txt) return cleanTitle(txt.slice(0, 40));
+  if (alt) return cleanTitle(alt.slice(0, 40));
+  if (tag) {
+    const idx = html.indexOf((tag.match(/href="([^"]+)"/i) || [])[1] || "");
     if (idx >= 0) {
       const near = html.slice(Math.max(0, idx - 300), idx + 500);
       const hM = near.match(/<h[1-4][^>]*>\s*([^<]{2,40}?)\s*<\/h[1-4]>/i);
@@ -302,24 +417,32 @@ export function parseResultPage(html, origin, kw) {
       const href = (full.match(/href="([^"]+)"/i) || [])[1] || "";
       if (!detailRe.test(href)) return false;
       const inner = a[2] || "";
-      // 关键词必须在锚点「内文」或锚点内 <img alt/title> 中（才是真正的片名），
-      // 排除锚点自身 title 属性（常被站点塞入「相关 / 在线观看」等噪声，导致误判）。
+      // 关键词在锚点「内文」或锚点内 <img alt/title> 中 = 真正的片名
       if (inner.includes(kwSafe)) return true;
       const imgM = inner.match(/\b(?:alt|title)="([^"]*)"/i);
-      return !!(imgM && imgM[1].includes(kwSafe));
+      if (imgM && imgM[1].includes(kwSafe)) return true;
+      // 锚点自身带图（懒加载属性 / 内含 <img> / class 是封面位）时，它的 title 属性就是图片标签 = 片名。
+      // 反例（普通导航锚点 <a title="在线观看">）不带图，不会误判。
+      if (isMediaAnchor(full)) {
+        const tm = full.match(/\btitle\s*=\s*["']([^"']*)["']/i);
+        if (tm && tm[1].includes(kwSafe)) return true;
+      }
+      return false;
     });
 
-    let chosenHref = null, chosenInner = null;
+    let chosenTag = null;
     if (matched.length) {
-      const pick = matched.find((a) => DETAIL_PRIORITY.test(a[0])) ||
+      chosenTag = (matched.find((a) => DETAIL_PRIORITY.test(a[0])) ||
                    matched.find((a) => PLAY_PRIORITY.test(a[0])) ||
-                   matched[0];
-      chosenHref = (pick[0].match(/href="([^"]+)"/i) || [])[1] || "";
-      chosenInner = pick[2];
+                   matched[0])[0];
     }
 
-    if (chosenHref) {
-      const title = extractTitle(html, chosenHref, chosenInner, kwSafe);
+    if (chosenTag) {
+      const chosenHref = (chosenTag.match(/href="([^"]+)"/i) || [])[1] || "";
+      const chosenInner = chosenTag.slice(chosenTag.indexOf(">") + 1, chosenTag.lastIndexOf("</a>"));
+      // 片名提示：关键词 + 提取出的片名（用于 alt/title 与片名一致的交叉匹配）
+      const hints = [kwSafe];
+      const title = extractTitle(html, chosenTag, chosenInner, kwSafe);
       // 强约束：提取到的标题必须确实包含关键词，否则该链接并非真正的片名
       //（如「电影 正片」「短剧」「电视剧 30集全」等模板/推荐噪声）→ 判为无结果，不绿。
       if (!title || !title.includes(kwSafe)) {
@@ -330,16 +453,27 @@ export function parseResultPage(html, origin, kw) {
       const qIdx = chosenHref ? html.indexOf(chosenHref) : -1;
       const qScope = qIdx >= 0 ? html.slice(Math.max(0, qIdx - 400), qIdx + 800) : html;
       const { liveQuality, liveScore } = extractQuality(qScope);
-      // 封面：优先链接内 <img>（含懒加载 data-src），其次附近 <img>
-      let poster = firstPoster(chosenInner, origin);
-      if (!poster && qIdx >= 0) poster = firstPoster(html.slice(Math.max(0, qIdx - 600), qIdx + 600), origin);
+      // 封面：结果卡片窗口内 → 全页「alt/title 与片名一致」交叉匹配 → 全页其他正分候选
+      hints.push(title);
+      const bp = bestPoster(html, chosenHref, origin, hints);
+      let poster = bp.poster;
+      let posterCand = bp.posterCand && bp.posterCand.length ? bp.posterCand : [];
+      if (!poster && qIdx >= 0) {
+        const near = collectPosterCands(html.slice(Math.max(0, qIdx - 800), qIdx + 1000), origin, hints);
+        if (near[0]) { poster = near[0].url; posterCand = near.map(x => x.url).concat(posterCand).slice(0, 5); }
+      }
 
       return { has: true, title, detailPath: chosenHref, liveQuality, liveScore,
-               pageUrl: abs(chosenHref, origin), poster, needsCaptcha: false, detailCount };
+               pageUrl: abs(chosenHref, origin), poster, posterCand, needsCaptcha: false, detailCount };
     }
     // 含关键词且存在详情链接，但**无任一详情链接命中关键词、也无共现信号** → 保守判无结果（不绿，退回「去站里搜」）。
+    // 封面仍尽力提取并标 posterGuess（弱信号）：让未绿站也能显示海报，而非只剩首字海报井。
+    // 真·空结果页已被下方 emptyPats 拦截，不会走到这里，所以不会给空页配假封面。
+    const guessCands = collectPosterCands(html, origin, kwSafe);
     return { has: false, title: null, detailPath: null, liveQuality: "", liveScore: 0,
-             pageUrl: null, needsCaptcha: false, detailCount };
+             pageUrl: null, needsCaptcha: false, detailCount,
+             poster: guessCands[0] ? guessCands[0].url : null,
+             posterCand: guessCands.map(x => x.url).slice(0, 5), posterGuess: true };
   }
 
   // 2) 无结果时才判定验证码 / 空页（不影响上面已确认有片源的站）
@@ -405,13 +539,32 @@ export async function findTemplates(site, kw) {
 //   连接失败/DNS/ENOTFOUND → 确属不可达 → dead，隐藏；
 //   超时 → 保守保留（可能慢或被静默丢弃，不一定是死站，交给浏览器）。
 // proxyBase: 可选免费代理出口（逗号分隔多个），用于绕过 CF 机房 ASN 被封；空=纯直连。
+// 外层包一层 try/catch：解析器任何异常都绝不让整站被静默丢弃（并发池会吃掉异常，
+// 表现为「这个站凭空消失」——之前就是这个坑，改解析器时务必先跑全量回归）。
 export async function probeSite(site, kw, proxyBase = "") {
+  const origin = site.origin;
+  const searchUrl = buildSearchUrl(site.search || site.templates?.[0], origin, kw);
+  const start = Date.now();
+  const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
+    latency_ms: 0, title: null, pageUrl: null, poster: null, posterCand: [], searchUrl, verified: false,
+    needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
+  try {
+    const r = await probeSiteImpl(site, kw, proxyBase);
+    if (!r) return base;
+    r.latency_ms = r.latency_ms || Date.now() - start;
+    return r;
+  } catch (e) {
+    return { ...base, err: String(e).slice(0, 120), latency_ms: Date.now() - start };
+  }
+}
+
+async function probeSiteImpl(site, kw, proxyBase) {
   const origin = site.origin;
   const searchUrl = buildSearchUrl(site.search || site.templates?.[0], origin, kw);
   const target = searchUrl;
   const start = Date.now();
   const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
-    latency_ms: 0, title: null, pageUrl: null, poster: null, searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
+    latency_ms: 0, title: null, pageUrl: null, poster: null, posterCand: [], searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
   const f = await fetchWithFallback(target, proxyBase);
   if (!f.html) {
     if (f.isTimeout) return base; // 超时：保守保留，交给浏览器
@@ -421,15 +574,17 @@ export async function probeSite(site, kw, proxyBase = "") {
   const status = f.status;
   // 经代理拿到的 HTML（代理层 200）按「拿到即解析」处理；直连则按状态码分流
   if (status >= 200 && status < 300) {
-    const parsed = parseResultPage(html, origin, kw);
-    if (parsed.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true, blocked: !!f.viaProxy };
-    if (parsed.has) {
-      const p = parsed;
+    const p = parseResultPage(html, origin, kw);
+    if (p.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true, blocked: !!f.viaProxy };
+    if (p.has) {
       return { ...base, quality: p.liveQuality || site.quality, qualityScore: p.liveScore || site.qualityScore,
-        latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, poster: p.poster || null, verified: true,
+        latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, poster: p.poster || null,
+        posterCand: p.posterCand || [], verified: true,
         realQuality: !!(p.liveQuality), viaProxy: !!f.viaProxy };
     }
-    return base; // 200 但无结果/SPA → 仍交给浏览器去搜
+    // 200 但未判有片源（JS渲染站/弱信号）→ 仍交给浏览器去搜；封面照样带上（弱信号海报）
+    return { ...base, latency_ms: Date.now() - start, title: p.title || null,
+             poster: p.poster || null, posterCand: p.posterCand || [], posterGuess: !!p.posterGuess };
   }
   if (status >= 500 && status < 600) {
     return { ...base, dead: true, latency_ms: Date.now() - start }; // 服务端错误 → 不可达
