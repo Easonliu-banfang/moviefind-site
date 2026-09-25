@@ -330,66 +330,53 @@ function demo(h) { kw.value = h; doSearch(); }
             <span class="result-sort">无广告 · 速度快 · 清晰度高 优先</span>
           </div>
 
-          <!-- 有片源 -->
-          <ol class="result-list" v-if="verified.length">
-            <li v-for="(r, i) in verified" :key="r.id" class="card ok" :style="{ animationDelay: (i * 0.04) + 's' }">
-              <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
-                <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
+          <!-- 有片源：卡片网格 -->
+          <div class="card-grid" v-if="verified.length">
+            <a v-for="(r, i) in verified" :key="r.id" class="card ok" :href="r.pageUrl || r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
+              <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
+                <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.title || r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
                 <span v-else class="well-char">{{ monogram(r.name) }}</span>
                 <span class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
+                <span class="play-overlay">▶</span>
               </div>
-              <div class="card-body">
-                <div class="card-top">
-                  <span class="site-name">{{ r.name }}</span>
+              <div class="card-info">
+                <h3 class="card-movie">{{ r.title || r.name }}</h3>
+                <div class="card-meta">
+                  <span class="meta-site">{{ r.name }}</span>
                   <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                  <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
                   <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
-                  <span class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
-                  <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
                 </div>
-                <div v-if="r.title" class="card-title">匹配：{{ r.title }}</div>
-                <p class="card-tip" v-else>该站有片源 · 可直接播放或搜该片</p>
               </div>
-              <div class="card-actions">
-                <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
-                <a class="go ghost" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-              </div>
-            </li>
-          </ol>
+              <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
+            </a>
+          </div>
 
-          <!-- 其余：去站内搜索（默认展开） -->
+          <!-- 其余：去站内搜索 -->
           <div v-if="others.length" class="others">
             <button class="others-toggle" @click="showOthers = !showOthers">
               <span class="caret">{{ showOthers ? "▾" : "▸" }}</span>
               其余 {{ others.length }} 个站点
               <span class="others-sub">点击去站内搜索</span>
             </button>
-            <ol class="result-list" v-if="showOthers">
-              <li v-for="(r, i) in others" :key="r.id" class="card neutral" :class="{ locked: r.needsCaptcha }" :style="{ animationDelay: (verified.length * 0.04 + i * 0.03) + 's' }">
-                <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
+            <div class="card-grid" v-if="showOthers">
+              <a v-for="(r, i) in others" :key="r.id" class="card neutral" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
+                <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
                   <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
                   <span v-else class="well-char">{{ monogram(r.name) }}</span>
                   <span class="rank">{{ verified.length + i + 1 }}</span>
+                  <span class="play-overlay">▶</span>
                 </div>
-                <div class="card-body">
-                  <div class="card-top">
-                    <span class="site-name">{{ r.name }}</span>
+                <div class="card-info">
+                  <h3 class="card-movie">{{ r.name }}</h3>
+                  <div class="card-meta">
                     <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                    <span class="q-tag nominal" title="站点标称画质，仅供参考">标称</span>
                     <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
-                    <span v-if="r.needsCaptcha" class="cap-badge">🔒 需验证</span>
-                    <span v-else class="web-badge">🌐 站内搜</span>
-                    <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验该站是否有片源"><i></i><i></i><i></i></span>
-                    <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
+                    <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验"><i></i><i></i><i></i></span>
                   </div>
-                  <p class="card-tip" v-if="r.needsCaptcha">该站有人机验证 / 风控，跳转后请先通过再搜该片</p>
-                  <p class="card-tip" v-else>点「搜该片」直达该站已搜《{{ kw }}》的结果页，打开即能播放</p>
                 </div>
-                <div class="card-actions">
-                  <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-                </div>
-              </li>
-            </ol>
+                <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
+              </a>
+            </div>
           </div>
 
           <!-- 用户手动隐藏的站点：恢复入口 -->
@@ -577,75 +564,108 @@ a { color: inherit; text-decoration: none; }
 .enh-frames i:nth-child(5) { height: 5px; animation-delay: .48s; }
 .result-sort { color: var(--faint); font-size: 12px; letter-spacing: 1px; }
 
-.result-list { list-style: none; display: flex; flex-direction: column; gap: 11px; }
-.card {
-  display: flex; align-items: center; gap: 14px; padding: 13px 15px;
-  background: linear-gradient(180deg, var(--panel), var(--bg2));
-  border: 1px solid var(--line); border-radius: 15px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.32);
-  transition: transform .22s cubic-bezier(.2,.7,.3,1), border-color .22s, box-shadow .22s;
-  animation: cardIn .5s cubic-bezier(.2,.7,.3,1) both;
-  position: relative; overflow: hidden;
+/* 卡片网格 */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 14px;
+  margin-top: 4px;
 }
-.card::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: transparent; transition: background .22s; }
-.card:hover { transform: translateY(-2px); border-color: var(--line2); box-shadow: 0 16px 40px rgba(0,0,0,.45); }
-.card:hover::after { background: linear-gradient(180deg, var(--accent), var(--accent2)); }
-.card.ok { background: linear-gradient(180deg, #112019, #0c1511); border-color: #1d3a2b; }
-.card.ok::after { background: linear-gradient(180deg, var(--good), #2c9c6a); }
-.card.ok:hover { border-color: #2c5a42; }
-.card.locked { background: linear-gradient(180deg, #1a1610, #110d08); border-color: #4a3a1c; }
-.card.neutral { opacity: .94; }
-.card.neutral:hover { opacity: 1; }
+
+/* 卡片：垂直布局，无边框，纯阴影 */
+.card {
+  display: flex;
+  flex-direction: column;
+  border: none;
+  border-radius: 14px;
+  background: var(--panel);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  overflow: hidden;
+  text-decoration: none;
+  color: var(--text);
+  transition: transform 0.25s cubic-bezier(0.2,0.7,0.3,1), box-shadow 0.25s;
+  animation: cardIn 0.5s cubic-bezier(0.2,0.7,0.3,1) both;
+  position: relative;
+  cursor: pointer;
+}
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 36px rgba(0,0,0,0.5);
+}
+.card.ok { background: linear-gradient(180deg, #112019, #0c1511); }
+.card.neutral { background: var(--bg2); }
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 
-/* 海报：2:3 大图封面；有图显示封面，无图回退到站名首字 monogram 井 + 排名角标 */
-.poster {
-  position: relative; width: 64px; height: 92px; border-radius: 11px; flex-shrink: 0;
-  display: grid; place-items: center; overflow: hidden; background: var(--well);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.4);
+/* 海报：大尺寸，2:3 比例 */
+.poster-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: var(--well);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
 }
 .poster-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.well-char { font-family: var(--serif); font-size: 26px; font-weight: 700; line-height: 1; }
-.poster .rank {
-  position: absolute; top: -5px; left: -5px; min-width: 19px; height: 19px; padding: 0 4px;
-  display: grid; place-items: center; border-radius: 999px; background: var(--panel2); color: var(--muted);
-  font-size: 11px; font-weight: 700; border: 1px solid var(--line2);
+.well-char { font-family: var(--serif); font-size: 48px; font-weight: 700; line-height: 1; }
+.rank {
+  position: absolute; top: 6px; left: 6px;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  display: grid; place-items: center; border-radius: 999px;
+  background: rgba(0,0,0,0.6); color: var(--muted);
+  font-size: 12px; font-weight: 700;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
 }
-.poster .rank.top { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1205; border-color: transparent; }
+.rank.top { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1205; }
 
-.card-body { flex: 1; min-width: 0; }
-.card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.site-name { font-weight: 700; font-size: 16px; }
-.q-badge { font-size: 11px; padding: 2px 9px; border-radius: 999px; color: #1a1205; font-weight: 800; }
+/* 播放覆盖层 */
+.play-overlay {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  background: rgba(0,0,0,0.4);
+  opacity: 0; transition: opacity 0.2s;
+  font-size: 36px; color: var(--accent);
+  pointer-events: none;
+}
+.card:hover .play-overlay { opacity: 1; }
+
+/* 卡片信息 */
+.card-info { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 6px; }
+.card-movie {
+  font-size: 14px; font-weight: 700; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.card-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.meta-site { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+/* 徽章样式 */
+.q-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; color: #1a1205; font-weight: 800; }
 .q-4k { background: linear-gradient(135deg, #ffd76e, #e8862e); }
 .q-bd { background: linear-gradient(135deg, #b18cff, #6c5ce7); color: #fff; }
 .q-hd { background: linear-gradient(135deg, #4fd1c5, #2e9e8e); color: #06231d; }
 .q-uhd { background: #39404f; color: #cfd6e2; }
-.q-tag { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--good-bg); color: var(--good); font-weight: 700; border: 1px solid #1f4a36; letter-spacing: .5px; }
-.q-tag.nominal { background: var(--well); color: var(--muted); border-color: var(--line2); }
-.cap-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: #3a2a12; color: var(--warn); font-weight: 700; border: 1px solid #5a431f; }
-.web-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--well); color: var(--muted); font-weight: 700; border: 1px solid var(--line2); }
-.st-tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid transparent; letter-spacing: .3px; }
+.st-tag { font-size: 9px; padding: 2px 6px; border-radius: 999px; font-weight: 700; border: 1px solid transparent; letter-spacing: .3px; white-space: nowrap; }
 .st-tag.st-good { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
 .st-tag.st-muted { background: #241f17; color: #c9a86a; border-color: #423620; }
 .st-tag.st-warn { background: #3a2a12; color: var(--warn); border-color: #5a431f; }
-.latency { color: var(--muted); font-size: 12px; }
-.latency.fast { color: var(--good); }
-.card-title { margin-top: 5px; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-tip { margin-top: 5px; color: var(--muted); font-size: 13px; }
-.hide-btn { margin-left: auto; width: 26px; height: 26px; flex-shrink: 0; border: 1px solid var(--line2); background: transparent; color: var(--faint); border-radius: 8px; cursor: pointer; font-size: 13px; line-height: 1; transition: .2s; }
-.hide-btn:hover { color: var(--danger); border-color: var(--danger); background: rgba(255,107,107,.08); }
-.v-frames { display: inline-flex; gap: 2px; align-items: center; height: 14px; padding: 1px 3px; background: rgba(233,184,79,0.06); border: 1px solid rgba(233,184,79,0.12); border-radius: 4px; flex-shrink: 0; }
+.v-frames { display: inline-flex; gap: 2px; align-items: center; height: 12px; padding: 1px 3px; background: rgba(233,184,79,0.06); border: 1px solid rgba(233,184,79,0.12); border-radius: 4px; flex-shrink: 0; }
 .v-frames i { display: block; width: 2px; background: var(--well); border: 1px solid var(--line2); animation: frame 1.4s ease-in-out infinite; }
-.v-frames i:nth-child(1) { height: 5px; animation-delay: 0s; }
-.v-frames i:nth-child(2) { height: 9px; animation-delay: .15s; }
-.v-frames i:nth-child(3) { height: 5px; animation-delay: .3s; }
-.card-actions { display: flex; flex-direction: column; gap: 7px; align-items: stretch; flex-shrink: 0; }
-.go { padding: 9px 15px; border-radius: 11px; background: var(--panel2);
-  font-size: 13px; color: var(--text); border: 1px solid var(--line2); font-weight: 700; transition: .2s; white-space: nowrap; text-align: center; }
-.go:hover { background: var(--accent); border-color: var(--accent); color: #1a1205; }
-.go.ghost { background: transparent; border: 1px solid var(--line2); color: var(--muted); font-weight: 600; }
-.go.ghost:hover { color: var(--accent); border-color: var(--accent); background: transparent; }
+.v-frames i:nth-child(1) { height: 4px; animation-delay: 0s; }
+.v-frames i:nth-child(2) { height: 7px; animation-delay: .15s; }
+.v-frames i:nth-child(3) { height: 4px; animation-delay: .3s; }
+
+/* 隐藏按钮 */
+.hide-btn {
+  position: absolute; top: 6px; right: 6px;
+  width: 24px; height: 24px; flex-shrink: 0;
+  border: none; background: rgba(0,0,0,0.6);
+  color: var(--faint); border-radius: 6px; cursor: pointer;
+  font-size: 13px; line-height: 1; transition: .2s;
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  z-index: 2;
+}
+.hide-btn:hover { color: var(--danger); background: rgba(255,107,107,0.2); }
 
 .others { margin-top: 18px; }
 .others-toggle { width: 100%; text-align: left; cursor: pointer; background: linear-gradient(180deg, rgba(17,21,29,.6), rgba(11,14,20,.6));
@@ -668,10 +688,12 @@ a { color: inherit; text-decoration: none; }
   .title { font-size: 52px; letter-spacing: 3px; }
   .features { grid-template-columns: repeat(2, 1fr); }
   .search button { padding: 0 20px; }
-  .card { flex-wrap: wrap; }
-  .poster { width: 54px; height: 78px; }
-  .card-actions { flex-direction: row; width: 100%; margin-top: 4px; }
-  .card-actions .go { flex: 1; }
+  .card-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .card-info { padding: 8px 10px 10px; }
+  .card-movie { font-size: 13px; }
+}
+@media (max-width: 400px) {
+  .card-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .orb, .frames span, .scan i, .v-frames i, .enh-frames i { animation: none !important; }
