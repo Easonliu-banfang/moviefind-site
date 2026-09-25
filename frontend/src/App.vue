@@ -321,13 +321,12 @@ function demo(h) { kw.value = h; doSearch(); }
         <template v-else-if="searched && results.length">
           <div class="result-head">
             <h2>
-              <b>{{ verified.length }}</b> 个有片源 · 共 <b>{{ verified.length + others.length }}</b> 个站点可达
+              搜索到 <b>{{ verified.length + others.length }}</b> 个片源
               <span v-if="enhancing" class="enhancing">
                 <span class="enh-frames"><i></i><i></i><i></i><i></i><i></i></span>
                 核验中
               </span>
             </h2>
-            <span class="result-sort">无广告 · 速度快 · 清晰度高 优先</span>
           </div>
 
           <!-- 有片源：卡片网格 -->
@@ -564,11 +563,12 @@ a { color: inherit; text-decoration: none; }
 .enh-frames i:nth-child(5) { height: 5px; animation-delay: .48s; }
 .result-sort { color: var(--faint); font-size: 12px; letter-spacing: 1px; }
 
-/* 卡片网格 */
+/* 卡片网格：固定列宽 + 居中，避免宽屏拉伸过宽、窄屏挤压过小 */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  grid-template-columns: repeat(auto-fill, 158px);
   gap: 14px;
+  justify-content: center;
   margin-top: 4px;
 }
 
@@ -688,7 +688,7 @@ a { color: inherit; text-decoration: none; }
   .title { font-size: 52px; letter-spacing: 3px; }
   .features { grid-template-columns: repeat(2, 1fr); }
   .search button { padding: 0 20px; }
-  .card-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; }
+  .card-grid { grid-template-columns: repeat(auto-fill, 132px); gap: 10px; }
   .card-info { padding: 8px 10px 10px; }
   .card-movie { font-size: 13px; }
 }
