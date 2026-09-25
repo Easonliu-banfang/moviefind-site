@@ -9,8 +9,9 @@ export const SITES = [
     "origin": "https://www.sorani.net",
     "search": "{origin}/",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "appmovie",
@@ -20,8 +21,9 @@ export const SITES = [
     "origin": "https://www.appmovie.art",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "auete-video",
@@ -31,8 +33,9 @@ export const SITES = [
     "origin": "https://www.aeete.com",
     "search": "{origin}/auete4so.php?searchword={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "darkvod",
@@ -42,8 +45,9 @@ export const SITES = [
     "origin": "https://darkvod.com",
     "search": "{origin}/tag/?wd={kw}&submit=",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "nivod",
@@ -53,8 +57,9 @@ export const SITES = [
     "origin": "https://www.nivod.vip",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "ppnix",
@@ -64,8 +69,9 @@ export const SITES = [
     "origin": "https://www.ppnix.com",
     "search": "{origin}/",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "duse91",
@@ -75,8 +81,9 @@ export const SITES = [
     "origin": "https://www.duse0.com",
     "search": "{origin}/search?t=KX6GEEJawvxs4v0NMbRQfQ%3D%3D&k={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "ifn",
@@ -86,8 +93,9 @@ export const SITES = [
     "origin": "https://ifn.watch",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": true,
+    "pinned": false
   },
   {
     "id": "fdzys",
@@ -97,8 +105,9 @@ export const SITES = [
     "origin": "https://fdzys.com",
     "search": "{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "sa-video",
@@ -108,8 +117,9 @@ export const SITES = [
     "origin": "https://www.lsjys11.com",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "juok",
@@ -119,8 +129,9 @@ export const SITES = [
     "origin": "https://juok3.top",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "yingshidaquan",
@@ -130,8 +141,9 @@ export const SITES = [
     "origin": "https://yingshidaquan.top",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "juzong",
@@ -141,8 +153,9 @@ export const SITES = [
     "origin": "https://www.juzong01.me",
     "search": "{origin}/vodsearch/{kw}-------------/",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "jianyunys",
@@ -152,8 +165,9 @@ export const SITES = [
     "origin": "https://jisuzhuiju.com",
     "search": "{origin}/search?keyword={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "pianku",
@@ -163,8 +177,9 @@ export const SITES = [
     "origin": "https://4k01.pianku.online",
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "66-dapianwang",
@@ -174,8 +189,9 @@ export const SITES = [
     "origin": "https://www.77dpw.vip",
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "xhkan",
@@ -185,8 +201,9 @@ export const SITES = [
     "origin": "https://www.xhkan.top",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "didahd",
@@ -196,8 +213,9 @@ export const SITES = [
     "origin": "https://www.didahd.xyz",
     "search": "{origin}/search/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "zhuiying",
@@ -207,8 +225,9 @@ export const SITES = [
     "origin": "https://zhuiying3.cc",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "wbbb",
@@ -218,8 +237,9 @@ export const SITES = [
     "origin": "https://wbbb1.com",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "kxyy",
@@ -229,8 +249,9 @@ export const SITES = [
     "origin": "https://www.kxyy1.cc",
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "dhvideo",
@@ -240,8 +261,9 @@ export const SITES = [
     "origin": "https://dhvideo.cc",
     "search": "{origin}/s.html?name={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "zip0",
@@ -251,8 +273,9 @@ export const SITES = [
     "origin": "https://zip0.com",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "103-39-111-180-29",
@@ -262,8 +285,9 @@ export const SITES = [
     "origin": "https://www.kkys14.com",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "sotvla",
@@ -273,8 +297,9 @@ export const SITES = [
     "origin": "https://www.sotvla.cc",
     "search": "{origin}/search.php?q={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "libvio",
@@ -284,8 +309,9 @@ export const SITES = [
     "origin": "https://libviobd.com",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "dbku",
@@ -296,7 +322,8 @@ export const SITES = [
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
     "ads": false,
-    "login": false
+    "login": false,
+    "pinned": true
   },
   {
     "id": "yingmao-cangku",
@@ -306,8 +333,9 @@ export const SITES = [
     "origin": "https://www.ymck.pro",
     "search": "{origin}/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "guangsu-yingshi",
@@ -317,8 +345,9 @@ export const SITES = [
     "origin": "https://www.yingshiso.link",
     "search": "{origin}/search.php?searchword={kw}",
     "captcha": true,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "naifei-fyi-19",
@@ -328,8 +357,9 @@ export const SITES = [
     "origin": "https://naifei.fyi",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "zndy",
@@ -339,8 +369,9 @@ export const SITES = [
     "origin": "https://zndy.top",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   },
   {
     "id": "skr-skr1-cc-9",
@@ -350,8 +381,9 @@ export const SITES = [
     "origin": "https://skr.skr1.cc:666",
     "search": "{origin}/vodsearch/{kw}-------------/",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": true,
+    "pinned": false
   },
   {
     "id": "aikanbot",
@@ -361,7 +393,8 @@ export const SITES = [
     "origin": "https://www1.aikanbot.com",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": false,
-    "login": false
+    "ads": true,
+    "login": false,
+    "pinned": false
   }
 ];
