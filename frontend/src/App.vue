@@ -1,9 +1,9 @@
 <script setup>
 import { ref } from "vue";
 
-// ====== 部署前必填：改成你的 Cloudflare Worker 实际地址 ======
+// ====== Cloudflare Worker 实际地址（兜底默认值，可由仓库 Secret VITE_WORKER_URL 覆盖）======
 // 例: "https://moviefind.myuser.workers.dev"
-const WORKER_BASE = (import.meta.env.VITE_WORKER_URL || "https://你的worker.workers.dev").replace(/\/+$/, "");
+const WORKER_BASE = (import.meta.env.VITE_WORKER_URL || "https://moviefind-search.17721266011.workers.dev").replace(/\/+$/, "");
 
 const kw = ref("");
 const results = ref([]);
