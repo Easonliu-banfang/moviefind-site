@@ -119,19 +119,21 @@ function makeCard(site, q) {
     _plan: [],              // 封面回退序列：[直链, Worker代取, 直链, 代取, ...]，见 buildPosterPlan
     _pi: 0,                 // 当前回退序列下标
     _faviconTimer: null,    // 图标加载 10 秒超时计时器
+    matchScore: 0,          // 关键词匹配度评分（Worker 返回，越高越排前）
     latency_ms: 0,
   };
 }
 
-// 综合排序分（优先级：无广告 > 速度 > 清晰度 > 无人机验证 > 能用站 > 纯无确认片源）
+// 综合排序分（优先级：关键词匹配度 > 无广告 > 速度 > 清晰度 > 无人机验证 > 能用站）
 // 各档权重严格递减，确保高优先级档无论如何盖过低优先级档。
 function rankScore(r) {
-  const noAds = r.ads === false ? 1_000_000 : 0;                            // 无广告：最高优先级
-  const speed = r.latency_ms > 0 ? Math.max(0, 100000 - r.latency_ms) : 0;   // 速度：仅已测延迟参与，越快越高
+  const match = (r.matchScore || 0) * 100000;                           // 匹配度：最高权重，100分=1000万
+  const noAds = r.ads === false ? 1_000_000 : 0;                            // 无广告：次高优先级
+  const speed = r.latency_ms > 0 ? Math.max(0, 100000 - r.latency_ms) : 0;   // 速度
   const quality = (r.qualityScore || 0) * 200;                              // 清晰度
-  const noCaptcha = r.needsCaptcha ? 0 : 100;                               // 无人机验证 优先
-  const usable = r.login === true ? 50 : 0;                                 // 需登录但能用的站，排在纯无确认片源之前
-  return noAds + speed + quality + noCaptcha + usable;
+  const noCaptcha = r.needsCaptcha ? 0 : 100;                               // 无人机验证
+  const usable = r.login === true ? 50 : 0;                                 // 需登录但能用的站
+  return match + noAds + speed + quality + noCaptcha + usable;
 }
 
 // 可见性：排除 服务端死站(dead) / 浏览器侧连不上(browserDead) / 用户手动隐藏(hidden)
@@ -183,6 +185,7 @@ async function enhanceWithWorker(q) {
         if (w.posterCand && w.posterCand.length) card.posterCand = w.posterCand; // 备用封面候选
         card._plan = buildPosterPlan(card.poster, card.posterCand); // 直链→代取 的失败回退序列
         card._pi = 0;
+        card.matchScore = w.matchScore || 0;  // 关键词匹配度评分
         card.latency_ms = w.latency_ms || 0;
       }
     }

@@ -437,6 +437,26 @@ async function fetchWithFallback(target, proxyBase) {
   return { html: directHtml, status: directStatus };
 }
 
+// 关键词匹配度评分（标题越贴近搜索词 → 分数越高，排序第一优先级）
+// 100 完全一致 / 90 以 kw 开头 / 80 前两字命中 / 70 包含 kw / 60 去空格后包含 / 50 含 kw 但有大量额外字符 / 0 无标题
+function computeMatchScore(title, kw) {
+  if (!title || !kw) return 0;
+  const t = title.trim().replace(/\s+/g, "");
+  const k = kw.trim().replace(/\s+/g, "");
+  if (!t || !k) return 0;
+  if (t === k) return 100;                          // 完全一致
+  if (t.startsWith(k)) return 90;                   // 以 kw 开头
+  if (k.length >= 2 && t.slice(0, 2) === k.slice(0, 2) && t.includes(k)) return 80; // 前两字命中 + 包含
+  if (t.includes(k)) return 70;                     // 包含 kw
+  // 去空格后包含（中文无空格影响，但英文标题可能有空格差异）
+  const tNoSp = t.replace(/\s/g, "");
+  const kNoSp = k.replace(/\s/g, "");
+  if (tNoSp.includes(kNoSp)) return 60;
+  // 含 kw 但额外字符很多（片名长度比 kw 长很多，可能是"XX剧场版""XX2"等）
+  if (t.includes(k) && t.length > k.length * 1.5) return 50;
+  return 0;
+}
+
 // 从HTML解析: has / title / pageUrl / liveQuality / liveScore / needsCaptcha
 export function parseResultPage(html, origin, kw) {
   const emptyPats = /没有找到|没有相关|暂无.*结果|搜索不到|没有您要找|抱歉.*没有|not\s*found|暂无该|查无此|未找到相关|未查询到|没有匹配/i;
@@ -604,11 +624,13 @@ export async function probeSite(site, kw, proxyBase = "") {
   const start = Date.now();
   const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
     latency_ms: 0, title: null, pageUrl: null, poster: null, posterCand: [], searchUrl, verified: false,
-    needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
+    needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false, matchScore: 0 };
   try {
     const r = await probeSiteImpl(site, kw, proxyBase);
     if (!r) return base;
     r.latency_ms = r.latency_ms || Date.now() - start;
+    // 计算关键词匹配度评分（标题越贴近搜索词 → 分数越高）
+    r.matchScore = computeMatchScore(r.title, kw);
     return r;
   } catch (e) {
     return { ...base, err: String(e).slice(0, 120), latency_ms: Date.now() - start };
@@ -711,8 +733,9 @@ export const run = {
       const r = await probeSite(site, kw, proxyBase);
       if (r) out.push(r);
     });
-    // 排序：已验证有片源优先（延迟升序、画质次之），其余（需验证/去站里搜）排后面
+    // 排序：关键词匹配度 > 已验证有片源 > 延迟升序 > 画质次之
     out.sort((a, b) =>
+      ((b.matchScore || 0) - (a.matchScore || 0)) ||
       ((b.verified ? 0 : 1) - (a.verified ? 0 : 1)) ||
       ((a.needsCaptcha ? 1 : 0) - (b.needsCaptcha ? 1 : 0)) ||
       (a.latency_ms - b.latency_ms) ||
