@@ -36,7 +36,7 @@ function makeCard(site, q) {
     origin: site.origin,
     searchUrl: buildSearchUrl(site, q),
     verified: false,
-    needsCaptcha: false,
+    needsCaptcha: !!site.captcha,
     pageUrl: null,
     title: null,
     latency_ms: 0,
