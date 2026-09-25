@@ -49,7 +49,6 @@ function makeCard(site, q) {
     qualityScore: site.qualityScore || 3,
     ads: site.ads ?? true,        // 默认"可能含广告"；人工实测无广告的站标 ads:false
     login: site.login ?? false,   // 免登录（实测需登录标 login:true）
-    pinned: !!site.pinned,        // 人工指定置顶（如独播库）
     realQuality: false,           // 是否为 Worker 实测画质（否则为站点标称，仅供参考）
     // 广告/登录状态标签（人工实测标注）
     statusLabel: site.login === true ? "需登录"
@@ -68,12 +67,15 @@ function makeCard(site, q) {
   };
 }
 
-// 综合排序分：置顶 > 画质最高 > 无广告·免登录 > 已确认有片源 > 延迟低
+// 综合排序分（优先级：无广告 > 速度 > 清晰度 > 无人机验证 > 免登录）
+// 各档权重严格递减，确保高优先级档无论如何盖过低优先级档。
 function rankScore(r) {
-  const q = r.qualityScore || 0;
-  const clean = (r.ads === false && r.login === false) ? 1 : 0;
-  const verified = r.verified ? 1 : 0;
-  return (r.pinned ? 1e6 : 0) + q * 100 + (clean ? 40 : 0) + (verified ? 10 : 0);
+  const noAds = r.ads === false ? 1_000_000 : 0;                            // 无广告：最高优先级
+  const speed = r.latency_ms > 0 ? Math.max(0, 100000 - r.latency_ms) : 0;   // 速度：仅已测延迟参与，越快越高
+  const quality = (r.qualityScore || 0) * 200;                              // 清晰度
+  const noCaptcha = r.needsCaptcha ? 0 : 100;                               // 无人机验证 优先
+  const noLogin = r.login === false ? 40 : 0;                               // 免登录：要登录沉底
+  return noAds + speed + quality + noCaptcha + noLogin;
 }
 
 // 可见性：排除 服务端死站(dead) / 浏览器侧连不上(browserDead) / 用户手动隐藏(hidden)
@@ -82,25 +84,21 @@ function isVisible(r) {
 }
 
 const visibleCards = computed(() => results.value.filter(isVisible));
-// 置顶推荐（人工指定，如独播库）—— 仅在该站确实搜到片源(或正在核验)时置顶，避免"没搜就排第一"
-const pinnedList = computed(() =>
-  visibleCards.value.filter((r) => r.pinned && (r.verified || enhancing.value)).sort((a, b) => rankScore(b) - rankScore(a))
-);
 // 已确认有片源（Worker 真的从站点抓到结果且无人机验证）→ 主按钮「立即播放」+ 次「搜该片」
 const verified = computed(() =>
   visibleCards.value
-    .filter((r) => r.verified && !r.needsCaptcha && !r.pinned && !r.login)
+    .filter((r) => r.verified && !r.needsCaptcha && !r.login)
     .sort((a, b) => rankScore(b) - rankScore(a) || a.latency_ms - b.latency_ms)
 );
 // 其余：被风控拦截 / SPA 站点 / 超时 —— 仍给出跳转，由用户浏览器去站内搜
 const others = computed(() =>
   visibleCards.value
-    .filter((r) => !(r.verified && !r.needsCaptcha) && !r.pinned && !r.login)
+    .filter((r) => !(r.verified && !r.needsCaptcha) && !r.login)
     .sort((a, b) => rankScore(b) - rankScore(a) || a.name.localeCompare(b.name, "zh"))
 );
 // 需登录的站：永远放最后（用户要求）
 const loginList = computed(() =>
-  visibleCards.value.filter((r) => r.login === true && !r.pinned).sort((a, b) => rankScore(b) - rankScore(a))
+  visibleCards.value.filter((r) => r.login === true).sort((a, b) => rankScore(b) - rankScore(a))
 );
 // 用户手动隐藏的站点
 const hiddenList = computed(() => results.value.filter((r) => hiddenIds.value.has(r.id)));
@@ -257,40 +255,15 @@ function demo(h) { kw.value = h; doSearch(); }
         <template v-else-if="searched && results.length">
           <div class="result-head">
             <h2>
-              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length + pinnedList.length + loginList.length }}</b> 个站点可达
+              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length + loginList.length }}</b> 个站点可达
               <span v-if="enhancing" class="enhancing">· 核验中…</span>
             </h2>
-            <span class="result-sort">画质最高 · 无广告 · 免登录 优先</span>
+            <span class="result-sort">无广告 · 速度快 · 清晰度高 优先</span>
           </div>
 
           <p v-if="!enhancing && verified.length === 0" class="hint-note">
             说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
           </p>
-
-
-          <!-- 置顶推荐（人工指定排第一，如独播库） -->
-          <p v-if="pinnedList.length" class="section-title">⭐ 推荐 · 无广告 · 免登录 · 速度快</p>
-          <ol class="result-list" v-if="pinnedList.length">
-            <li v-for="(r, i) in pinnedList" :key="r.id" class="card ok pinned">
-              <div class="rank top">⭐</div>
-              <div class="card-body">
-                <div class="card-top">
-                  <span class="site-name">{{ r.name }}</span>
-                  <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                  <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
-                  <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
-                  <span v-if="r.verified" class="ok-badge">✅ 已确认</span>
-                  <span class="latency" :class="{ fast: r.latency_ms < 1500 }" v-if="r.latency_ms">⚡ {{ r.latency_ms }}ms</span>
-                  <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
-                </div>
-                <p class="card-tip">⭐ 推荐 · 无广告 · 免登录 · 速度快，优先用这个</p>
-              </div>
-              <div class="card-actions">
-                <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
-                <a class="go ghost" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-              </div>
-            </li>
-          </ol>
 
           <!-- 已确认有片源 -->
           <ol class="result-list" v-if="verified.length">
@@ -378,7 +351,7 @@ function demo(h) { kw.value = h; doSearch(); }
           </div>
         </template>
 
-        <p v-else-if="searched && verified.length + others.length + pinnedList.length + loginList.length === 0" class="hint empty">
+        <p v-else-if="searched && verified.length + others.length + loginList.length === 0" class="hint empty">
           🙅 暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
         </p>
 
@@ -489,7 +462,6 @@ a { color: inherit; text-decoration: none; }
 .enhancing::before { content: ""; width: 11px; height: 11px; border: 2px solid #2f3646; border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .result-sort { color: var(--muted); font-size: 12px; }
-.section-title { margin: 4px 4px 10px; font-size: 14px; font-weight: 700; color: var(--accent); }
 .hint-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: var(--panel); border: 1px solid #232836; border-radius: 12px; }
 .hint-note b { color: var(--text); }
 
@@ -529,7 +501,6 @@ a { color: inherit; text-decoration: none; }
 .st-tag.st-good { background: #16331f; color: #55e6a3; border-color: #245c38; }
 .st-tag.st-muted { background: #2a2620; color: #c9a86a; border-color: #4a3d28; }
 .st-tag.st-warn { background: #3a2a12; color: #e6b455; border-color: #5a431f; }
-.card.pinned { border-color: var(--accent); background: linear-gradient(135deg, #1d261b, #131c17); }
 .latency { color: var(--muted); font-size: 12px; }
 .latency.fast { color: #55e6a3; }
 .card-title { margin-top: 4px; color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
