@@ -79,6 +79,7 @@ function makeCard(site, q) {
     browserDead: false,           // 浏览器侧（用户自己的网络）连不上 → 自动隐藏
     pageUrl: null,
     title: null,
+    poster: null,             // 电影封面（Worker 实测抓到的海报 URL；无则为 null → 回退 monogram 井）
     latency_ms: 0,
   };
 }
@@ -139,6 +140,7 @@ async function enhanceWithWorker(q) {
         card.qualityScore = w.qualityScore || card.qualityScore;
         card.pageUrl = w.pageUrl || null;
         card.title = w.title || null;
+        card.poster = w.poster || null;   // Worker 实测封面；没有则保持 null（显示 monogram 井）
         card.latency_ms = w.latency_ms || 0;
       }
     }
@@ -296,8 +298,9 @@ function demo(h) { kw.value = h; doSearch(); }
           <!-- 已确认有片源 -->
           <ol class="result-list" v-if="verified.length">
             <li v-for="(r, i) in verified" :key="r.id" class="card ok" :style="{ animationDelay: (i * 0.04) + 's' }">
-              <div class="well" :style="wellStyle(r.id)">
-                <span class="well-char">{{ monogram(r.name) }}</span>
+              <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
+                <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="r.poster = null" />
+                <span v-else class="well-char">{{ monogram(r.name) }}</span>
                 <span class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
               </div>
               <div class="card-body">
@@ -329,8 +332,9 @@ function demo(h) { kw.value = h; doSearch(); }
             </button>
             <ol class="result-list" v-if="showOthers">
               <li v-for="(r, i) in others" :key="r.id" class="card neutral" :class="{ locked: r.needsCaptcha }" :style="{ animationDelay: (verified.length * 0.04 + i * 0.03) + 's' }">
-                <div class="well" :style="wellStyle(r.id)">
-                  <span class="well-char">{{ monogram(r.name) }}</span>
+                <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
+                  <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="r.poster = null" />
+                  <span v-else class="well-char">{{ monogram(r.name) }}</span>
                   <span class="rank">{{ verified.length + i + 1 }}</span>
                 </div>
                 <div class="card-body">
@@ -555,18 +559,20 @@ a { color: inherit; text-decoration: none; }
 .card.neutral:hover { opacity: 1; }
 @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 
-/* 海报井：确定性色 + 站名首字 monogram + 排名角标 */
-.well {
-  position: relative; width: 46px; height: 46px; border-radius: 11px; flex-shrink: 0;
-  display: grid; place-items: center; overflow: hidden;
+/* 海报：2:3 大图封面；有图显示封面，无图回退到站名首字 monogram 井 + 排名角标 */
+.poster {
+  position: relative; width: 64px; height: 92px; border-radius: 11px; flex-shrink: 0;
+  display: grid; place-items: center; overflow: hidden; background: var(--well);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.04), 0 4px 14px rgba(0,0,0,.4);
 }
-.well-char { font-family: var(--serif); font-size: 22px; font-weight: 700; line-height: 1; }
-.well .rank {
+.poster-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.well-char { font-family: var(--serif); font-size: 26px; font-weight: 700; line-height: 1; }
+.poster .rank {
   position: absolute; top: -5px; left: -5px; min-width: 19px; height: 19px; padding: 0 4px;
   display: grid; place-items: center; border-radius: 999px; background: var(--panel2); color: var(--muted);
   font-size: 11px; font-weight: 700; border: 1px solid var(--line2);
 }
-.well .rank.top { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1205; border-color: transparent; }
+.poster .rank.top { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1205; border-color: transparent; }
 
 .card-body { flex: 1; min-width: 0; }
 .card-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -621,6 +627,7 @@ a { color: inherit; text-decoration: none; }
   .features { grid-template-columns: repeat(2, 1fr); }
   .search button { padding: 0 20px; }
   .card { flex-wrap: wrap; }
+  .poster { width: 54px; height: 78px; }
   .card-actions { flex-direction: row; width: 100%; margin-top: 4px; }
   .card-actions .go { flex: 1; }
 }

@@ -3,6 +3,8 @@
 // 2026-09-25 全站适配修正：每个站的 search 模板已按「站点自身搜索表单」逐站实测校准
 export const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 const REQUEST_TIMEOUT_MS = 4500;
+// 经代理出口的超时（免费代理普遍较慢，放宽到 9s）
+const PROXY_TIMEOUT_MS = 9000;
 export const MAX_CONCURRENT = 14;
 // 一个站最多尝试的验证模板数（见 templates）
 export const MAX_TEMPLATES_PER_SITE = 5;
@@ -43,7 +45,7 @@ export const SITES = [
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}", "{origin}/search.php?q={kw}"] },
   { id: "auete-video", name: "Auete影视", origin: "https://www.aeete.com", quality: "蓝光", qualityScore: 4,
     search: "{origin}/auete4so.php?searchword={kw}",
-    templates: ["{origin}/auete4so.php?searchword={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
+    templates: ["{origin}/auete4so.php?searchword={kw}", "{origin}/index.php/vod/search.html?wd={kw}"], captcha: true },
   { id: "darkvod", name: "黑夜影院", origin: "https://darkvod.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/tag/?wd={kw}&submit=",
     templates: ["{origin}/tag/?wd={kw}&submit=", "{origin}/index.php?m=vod-search&wd={kw}", "{origin}/search.php?q={kw}"] },
@@ -144,6 +146,69 @@ function abs(path, origin) {
   return origin.replace(/\/+$/, "") + (path.startsWith("/") ? path : "/" + path);
 }
 
+// 从一段 HTML 片段里取「电影封面」：优先 data-src / data-original（懒加载），其次 src。
+// 过滤 favicon / logo / 1x1 / .ico，避免把站标当封面。返回绝对地址。
+function firstPoster(scope, origin) {
+  if (!scope) return null;
+  const tags = [...scope.matchAll(/<img\b[^>]*>/gi)];
+  for (const t of tags) {
+    const tag = t[0];
+    const ds = tag.match(/\b(?:data-src|data-original|data-lazy-src|data-lazy)\s*=\s*"([^"]+)"/i);
+    const s = tag.match(/\bsrc\s*=\s*"([^"]+)"/i);
+    const src = (ds && ds[1]) || (s && s[1]) || null;
+    if (!src) continue;
+    if (src.startsWith("data:") || /\.ico(\?|$)/i.test(src)) continue;
+    if (/favicon|logo\b|icon-/i.test(src)) continue;
+    return abs(src, origin);
+  }
+  return null;
+}
+
+// 清理片名后缀噪声（封面图片 / 海报 等）
+function cleanTitle(t) {
+  return ((t || "").replace(/(封面图片|海报图片|封面|海报|图片)$/, "").trim()) || null;
+}
+
+// 提取标题：优先取「含关键词」的来源（可见文字 或 图片 alt/title），避免把角标「短剧/全64集/正片」误当片名；
+// 其次取链接附近含关键词的 <h1-4>（仅限该结果项周边，不取页面级标题）。
+function extractTitle(html, href, innerHtml, kwSafe) {
+  if (innerHtml) {
+    const txt = innerHtml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const imgM = innerHtml.match(/\b(?:alt|title)="([^"]*)"/i);
+    const alt = imgM && imgM[1].trim();
+    // 优先含关键词的来源
+    if (txt && txt.includes(kwSafe)) return cleanTitle(txt.slice(0, 40));
+    if (alt && alt.includes(kwSafe)) return cleanTitle(alt.slice(0, 40));
+    if (txt) return cleanTitle(txt.slice(0, 40));
+    if (alt) return cleanTitle(alt.slice(0, 40));
+  }
+  if (href) {
+    const idx = html.indexOf(href);
+    if (idx >= 0) {
+      const near = html.slice(Math.max(0, idx - 300), idx + 500);
+      const hM = near.match(/<h[1-4][^>]*>\s*([^<]{2,40}?)\s*<\/h[1-4]>/i);
+      if (hM && hM[1].includes(kwSafe)) return cleanTitle(hM[1].trim().slice(0, 40));
+    }
+  }
+  return null;
+}
+
+// 从「命中结果附近」提取实测画质（避免把页面导航/筛选区的「高清」误当本片画质）
+function extractQuality(scope) {
+  let m = scope.match(/<[^>]*>(4K|蓝光|1080P|1080|超清|高清|720P)<\/[^>]*>/i) ||
+          scope.match(/<(?:em|i|span|b)[^>]*>(4K|蓝光|1080P|超清|高清)<\/[^>]*>/i);
+  if (!m) m = scope.match(/(4K|蓝光|1080P|超清|高清)/i);
+  if (m) {
+    const t = m[1].toLowerCase();
+    if (t.includes("4k")) return { liveQuality: "4K", liveScore: 5 };
+    if (t.includes("蓝光")) return { liveQuality: "蓝光", liveScore: 4 };
+    if (t.includes("1080")) return { liveQuality: "1080P", liveScore: 3 };
+    if (t.includes("720")) return { liveQuality: "720P", liveScore: 2 };
+    if (t.includes("高清") || t.includes("超清")) return { liveQuality: "高清", liveScore: 2 };
+  }
+  return { liveQuality: "", liveScore: 0 };
+}
+
 // 拼接搜索 URL（模板 + origin + 编码关键词）
 export function buildSearchUrl(tpl, origin, kw) {
   return (tpl || "")
@@ -158,6 +223,54 @@ function siteTemplates(site) {
   const out = [];
   for (const t of merged) { if (!seen.has(t)) { seen.add(t); out.push(t); } }
   return out.slice(0, MAX_TEMPLATES_PER_SITE);
+}
+
+// ===== 免费代理出口（解决 CF 机房 IP 被影视站风控拦截）=====
+// 原理：CF Worker 出口是数据中心 ASN，常被 WAF/风控按 ASN 拦（403/406/850 等）。
+// 通过免费 CORS/代理服务（allorigins / corsproxy 等均为 GitHub 开源小众方案）把请求转发，
+// 实际出口变成「代理服务器的 IP」，从而绕开针对 CF ASN 的封禁——不花钱、不封号。
+// 默认 proxyBase 为空 = 纯直连（与旧行为一致）；配置后才启用，且任何失败都回退直连，绝不破坏可达性。
+async function fetchViaProxy(target, proxyBase) {
+  const bases = (proxyBase || "").split(",").map((s) => s.trim()).filter(Boolean);
+  for (const base of bases) {
+    try {
+      const res = await fetch(base + encodeURIComponent(target), {
+        headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "zh-CN" },
+        signal: AbortSignal.timeout(PROXY_TIMEOUT_MS), redirect: "follow",
+      });
+      if (!res.ok) continue;
+      const html = await res.text();
+      if (!html || html.length < 50) continue;
+      return { html, viaProxy: base };
+    } catch { continue; }
+  }
+  return null;
+}
+
+// 直连优先；直连被 WAF/风控(4xx)拦截 或 网络层失败 时，若配置了代理则回退到代理出口。
+// 返回 { html, status, viaProxy }；html 为 null 表示彻底拿不到（连接失败/超时/代理也失败）。
+async function fetchWithFallback(target, proxyBase) {
+  let directHtml = null, directStatus = 0;
+  try {
+    const res = await fetch(target, {
+      headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "zh-CN" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: "follow",
+    });
+    directHtml = await res.text();
+    directStatus = res.status;
+  } catch (e) {
+    const isTimeout = e && (e.name === "TimeoutError" || e.name === "AbortError" || (e.cause && e.cause.name === "TimeoutError"));
+    if (isTimeout) return { html: null, status: 0, isTimeout: true };
+    // 网络层失败（DNS/连接被 reset/TLS）：交给代理救一次
+    if (proxyBase) { const p = await fetchViaProxy(target, proxyBase); if (p) return { html: p.html, status: 200, viaProxy: p.viaProxy }; }
+    return { html: null, status: 0, connFailed: true };
+  }
+  // 直连拿到响应，但被 WAF/风控(4xx)拦截 → 试用代理出口替换（代理 IP 可能不被拦）
+  if (directStatus >= 400 && directStatus < 600 && proxyBase) {
+    const p = await fetchViaProxy(target, proxyBase);
+    if (p) return { html: p.html, status: 200, viaProxy: p.viaProxy }; // 代理成功取到 HTML
+  }
+  return { html: directHtml, status: directStatus };
 }
 
 // 从HTML解析: has / title / pageUrl / liveQuality / liveScore / needsCaptcha
@@ -177,52 +290,55 @@ export function parseResultPage(html, origin, kw) {
   )];
   const detailCount = lenient.length;
 
-  // 1) 真实结果优先：含关键词 + 存在「文字含关键词」的详情/播放链接 → 判定有片源并直链该结果。
-  //    绝不被页脚偶发「验证/安全」字样误杀；也只链真正的搜索结果，不链导航/热门侧栏。
+  // 1) 真实结果优先：含关键词 + 存在「文字/alt/title 含关键词」的详情/播放链接（强信号）→ 判定有片源并直链该结果。
+  //    次级信号：关键词与详情链接在同一小窗口共现（覆盖「标题在链接兄弟节点、不在 <a> 内」的真实结果页）。
+  //    空结果页的「无结果」提示语附近不计入，避免把模板/侧栏详情链接误判为片源（假绿）。
   if (hitKw && detailCount >= 1) {
-    const anchored = [...html.matchAll(
-      new RegExp(`<a\\b[^>]*href="([^"]*?(?:${DETAIL_RE_SRC})[^"]*?)"[^>]*>([\\s\\S]*?)<\\/a>`, "gi")
-    )];
-    // 只认「链接文字含关键词」的链接 = 真正的搜索结果（排除页内导航/侧栏热门）
-    const matched = anchored.filter((a) => (a[2] || "").includes(kwSafe));
+    // 主信号：详情链接的全文（含属性/alt/title/内文）包含关键词 = 真正的搜索结果
+    const allAnchors = [...html.matchAll(/<a\b([\s\S]*?)>([\s\S]*?)<\/a>/gi)];
+    const detailRe = new RegExp(`(?:${DETAIL_RE_SRC})`, "i");
+    const matched = allAnchors.filter((a) => {
+      const full = a[0];
+      const href = (full.match(/href="([^"]+)"/i) || [])[1] || "";
+      if (!detailRe.test(href)) return false;
+      const inner = a[2] || "";
+      // 关键词必须在锚点「内文」或锚点内 <img alt/title> 中（才是真正的片名），
+      // 排除锚点自身 title 属性（常被站点塞入「相关 / 在线观看」等噪声，导致误判）。
+      if (inner.includes(kwSafe)) return true;
+      const imgM = inner.match(/\b(?:alt|title)="([^"]*)"/i);
+      return !!(imgM && imgM[1].includes(kwSafe));
+    });
+
+    let chosenHref = null, chosenInner = null;
     if (matched.length) {
-      const chosen =
-        matched.find((a) => DETAIL_PRIORITY.test(a[1])) ||
-        matched.find((a) => PLAY_PRIORITY.test(a[1])) ||
-        matched[0];
-      const detailPath = chosen ? chosen[1] : null;
-      let title = chosen && chosen[2] ? chosen[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 40) : null;
-
-      if (!title && lenient[0]) {
-        const idx = html.indexOf(lenient[0][1]);
-        const near = html.slice(Math.max(0, idx - 60), idx);
-        const tM = near.match(/>([^<>]{2,40})<\/a>\s*$/) || near.match(/["']name["']\s*:\s*["']([^"']{2,40})["']/);
-        if (tM) title = tM[1].trim();
-      }
-      if (!title) {
-        const hM = html.match(/<h[2-4][^>]*>\s*([^<]{2,60}?)\s*<\/h[2-4]>/i);
-        if (hM) title = hM[1].trim();
-      }
-
-      let liveQuality = "", liveScore = 0;
-      let m = html.match(/<[^>]*>(4K|蓝光|1080P|1080|超清|高清|720P)<\/[^>]*>/i) ||
-              html.match(/<(?:em|i|span|b)[^>]*>(4K|蓝光|1080P|超清|高清)<\/[^>]*>/i);
-      if (!m) m = html.match(/(4K|蓝光|1080P|超清|高清)/i);
-      if (m) {
-        const t = m[1].toLowerCase();
-        if (t.includes("4k")) { liveQuality = "4K"; liveScore = 5; }
-        else if (t.includes("蓝光")) { liveQuality = "蓝光"; liveScore = 4; }
-        else if (t.includes("1080")) { liveQuality = "1080P"; liveScore = 3; }
-        else if (t.includes("720")) { liveQuality = "720P"; liveScore = 2; }
-        else if (t.includes("高清") || t.includes("超清")) { liveQuality = "高清"; liveScore = 2; }
-      }
-
-      return { has: true, title, detailPath, liveQuality, liveScore,
-               pageUrl: detailPath ? abs(detailPath, origin) : null, needsCaptcha: false, detailCount };
+      const pick = matched.find((a) => DETAIL_PRIORITY.test(a[0])) ||
+                   matched.find((a) => PLAY_PRIORITY.test(a[0])) ||
+                   matched[0];
+      chosenHref = (pick[0].match(/href="([^"]+)"/i) || [])[1] || "";
+      chosenInner = pick[2];
     }
-    // 有详情链接但文字均不含关键词（海报/图片结果，标题在 alt/图片里）→ 仍判定「有片源」（绿），
-    // 但不强行深链到播放页（避免链到导航/分类），交由「搜该片」引导用户进站。
-    return { has: true, title: null, detailPath: null, liveQuality: "", liveScore: 0,
+
+    if (chosenHref) {
+      const title = extractTitle(html, chosenHref, chosenInner, kwSafe);
+      // 强约束：提取到的标题必须确实包含关键词，否则该链接并非真正的片名
+      //（如「电影 正片」「短剧」「电视剧 30集全」等模板/推荐噪声）→ 判为无结果，不绿。
+      if (!title || !title.includes(kwSafe)) {
+        return { has: false, title: null, detailPath: null, liveQuality: "", liveScore: 0,
+                 pageUrl: null, needsCaptcha: false, detailCount };
+      }
+      // 画质：只在「命中结果附近」提取，避免把页面导航/筛选区的「高清」误当本片实测画质
+      const qIdx = chosenHref ? html.indexOf(chosenHref) : -1;
+      const qScope = qIdx >= 0 ? html.slice(Math.max(0, qIdx - 400), qIdx + 800) : html;
+      const { liveQuality, liveScore } = extractQuality(qScope);
+      // 封面：优先链接内 <img>（含懒加载 data-src），其次附近 <img>
+      let poster = firstPoster(chosenInner, origin);
+      if (!poster && qIdx >= 0) poster = firstPoster(html.slice(Math.max(0, qIdx - 600), qIdx + 600), origin);
+
+      return { has: true, title, detailPath: chosenHref, liveQuality, liveScore,
+               pageUrl: abs(chosenHref, origin), poster, needsCaptcha: false, detailCount };
+    }
+    // 含关键词且存在详情链接，但**无任一详情链接命中关键词、也无共现信号** → 保守判无结果（不绿，退回「去站里搜」）。
+    return { has: false, title: null, detailPath: null, liveQuality: "", liveScore: 0,
              pageUrl: null, needsCaptcha: false, detailCount };
   }
 
@@ -288,40 +404,38 @@ export async function findTemplates(site, kw) {
 //   服务端错误(5xx) → 视为不可达 → dead，前端自动隐藏；
 //   连接失败/DNS/ENOTFOUND → 确属不可达 → dead，隐藏；
 //   超时 → 保守保留（可能慢或被静默丢弃，不一定是死站，交给浏览器）。
-export async function probeSite(site, kw) {
+// proxyBase: 可选免费代理出口（逗号分隔多个），用于绕过 CF 机房 ASN 被封；空=纯直连。
+export async function probeSite(site, kw, proxyBase = "") {
   const origin = site.origin;
   const searchUrl = buildSearchUrl(site.search || site.templates?.[0], origin, kw);
   const target = searchUrl;
   const start = Date.now();
   const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
-    latency_ms: 0, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false };
-  try {
-    const res = await fetch(target, {
-      headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "zh-CN" },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: "follow",
-    });
-    if (res.ok) {
-      const html = await res.text();
-      const parsed = parseResultPage(html, origin, kw);
-      if (parsed.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true };
-      if (parsed.has) {
-        const p = parsed;
-        return { ...base, quality: p.liveQuality || site.quality, qualityScore: p.liveScore || site.qualityScore,
-          latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, verified: true,
-          realQuality: !!(p.liveQuality) };
-      }
-      return base; // 200 但无结果/SPA → 仍交给浏览器去搜
-    }
-    if (res.status >= 500 && res.status < 600) {
-      return { ...base, dead: true, latency_ms: Date.now() - start }; // 服务端错误 → 不可达
-    }
-    // 4xx（WAF/风控 401/403/406/412/419/429/451/499/850）→ 存活但拦机房IP，浏览器可访问
-    return { ...base, needsCaptcha: true, blocked: true, latency_ms: Date.now() - start };
-  } catch (e) {
-    const isTimeout = e && (e.name === "TimeoutError" || e.name === "AbortError" || (e.cause && e.cause.name === "TimeoutError"));
-    if (isTimeout) return base; // 超时：保守保留，交给浏览器
+    latency_ms: 0, title: null, pageUrl: null, poster: null, searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
+  const f = await fetchWithFallback(target, proxyBase);
+  if (!f.html) {
+    if (f.isTimeout) return base; // 超时：保守保留，交给浏览器
     return { ...base, dead: true }; // 连接失败 / DNS / ENOTFOUND → 确属不可达，隐藏
   }
+  const html = f.html;
+  const status = f.status;
+  // 经代理拿到的 HTML（代理层 200）按「拿到即解析」处理；直连则按状态码分流
+  if (status >= 200 && status < 300) {
+    const parsed = parseResultPage(html, origin, kw);
+    if (parsed.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true, blocked: !!f.viaProxy };
+    if (parsed.has) {
+      const p = parsed;
+      return { ...base, quality: p.liveQuality || site.quality, qualityScore: p.liveScore || site.qualityScore,
+        latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, poster: p.poster || null, verified: true,
+        realQuality: !!(p.liveQuality), viaProxy: !!f.viaProxy };
+    }
+    return base; // 200 但无结果/SPA → 仍交给浏览器去搜
+  }
+  if (status >= 500 && status < 600) {
+    return { ...base, dead: true, latency_ms: Date.now() - start }; // 服务端错误 → 不可达
+  }
+  // 4xx（WAF/风控 401/403/406/412/419/429/451/499/850）→ 存活但拦机房IP，浏览器可访问
+  return { ...base, needsCaptcha: true, blocked: true, latency_ms: Date.now() - start };
 }
 
 // 通用并发限制
@@ -332,10 +446,10 @@ export async function poolLimit(items, limit, fn) {
 }
 
 export const run = {
-  async search(kw, max = 40) {
+  async search(kw, max = 40, proxyBase = "") {
     const out = [];
     await poolLimit(SITES, MAX_CONCURRENT, async (site) => {
-      const r = await probeSite(site, kw);
+      const r = await probeSite(site, kw, proxyBase);
       if (r) out.push(r);
     });
     // 排序：已验证有片源优先（延迟升序、画质次之），其余（需验证/去站里搜）排后面

@@ -19,17 +19,20 @@ const j = (obj, status = 200) => new Response(JSON.stringify(obj), {
 });
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+    // 免费代理出口：在 wrangler.toml [vars] 或 secret 里配置 PROXY_BASE（逗号分隔多个，可留空=纯直连）
+    const proxyBase = (env && (env.PROXY_BASE || env.PROXY_BASE_URL || "")) || "";
 
     try {
       if (url.pathname === "/api/search") {
         const q = (url.searchParams.get("q") || "").trim();
         if (!q) return j({ ok: false, error: "缺少 q 参数" }, 400);
         const max = Math.min(Math.max(parseInt(url.searchParams.get("max") || "8", 10) || 8, 1), 40);
-        const results = await run.search(q, max);
-        return j({ ok: true, query: q, ts: Date.now(), results });
+        const results = await run.search(q, max, proxyBase);
+        return j({ ok: true, query: q, ts: Date.now(), proxy: !!proxyBase, results });
       }
       if (url.pathname === "/api/sites") {
         return j({ ok: true, sites: SITES.map(s => ({ id: s.id, name: s.name, origin: s.origin, quality: s.quality })) });

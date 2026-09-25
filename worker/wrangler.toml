@@ -2,5 +2,17 @@ name = "moviefind-search"
 main = "src/index.mjs"
 compatibility_date = "2026-01-01"
 
+# 免费代理出口（解决 CF 机房 IP 被影视站风控拦截）
+# 留空 = 纯直连（默认，与旧行为一致，最稳）。
+# 启用时填入逗号分隔的免费代理/ CORS 服务基址，Worker 会把搜索请求经这些服务转发，
+# 用「代理服务器 IP」替代 CF 机房 IP，从而绕开按 ASN 的风控封禁（不花钱、不封号）。
+# 注意：免费公共服务稳定性不一，任何失败都会自动回退直连，不会让站点变不可达。
+# 可选：
+#   https://api.allorigins.win/raw?url=
+#   https://corsproxy.io/?url=
+#   https://api.codetabs.com/v1/proxy/?quest=
+#   https://thingproxy.freeboard.io/fetch/
+# PROXY_BASE = "https://api.allorigins.win/raw?url=,https://corsproxy.io/?url="
+
 [observability]
 enabled = true
