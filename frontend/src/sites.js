@@ -32,7 +32,7 @@ export const SITES = [
     "qualityScore": 4,
     "origin": "https://www.aeete.com",
     "search": "{origin}/auete4so.php?searchword={kw}",
-    "captcha": false,
+    "captcha": true,
     "ads": true,
     "login": false,
     "pinned": false
