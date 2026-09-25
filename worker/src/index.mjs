@@ -150,6 +150,32 @@ export default {
         await poolLimit(sites, MAX_CONCURRENT, async (site) => { results.push(await findTemplates(site, q)); });
         return j({ ok: true, q, results });
       }
+
+      // 站点 favicon 解析：从站点 HTML 提取 <link rel="icon"> 标签的真实 URL
+      if (url.pathname === "/api/favicon") {
+        const u = url.searchParams.get("url") || "";
+        if (!u) return j({ ok: false, error: "缺少 url 参数" }, 400);
+        try {
+          const res = await fetch(u, {
+            headers: { "User-Agent": UA, "Accept": "text/html" },
+            signal: AbortSignal.timeout(5000),
+            redirect: "follow",
+          });
+          if (!res.ok) return j({ ok: false, http: res.status }, 502);
+          const html = await res.text();
+          // 匹配 <link rel="icon" href="..."> 或 <link rel="shortcut icon" href="...">
+          const linkRe = /<link[^>]*rel=["'](?:shortcut\s+)?icon["'][^>]*href=["']([^"']+)["']/i;
+          const m = html.match(linkRe);
+          let favicon = m ? m[1] : "/favicon.ico";
+          // 转为绝对 URL
+          if (favicon.startsWith("//")) favicon = "https:" + favicon;
+          else if (favicon.startsWith("/")) favicon = new URL(u).origin + favicon;
+          else if (!favicon.startsWith("http")) favicon = new URL(u).origin + "/" + favicon;
+          return j({ ok: true, url: favicon });
+        } catch (e) {
+          return j({ ok: false, error: String(e).slice(0, 120) }, 502);
+        }
+      }
       return j({ ok: false, error: "Not Found" }, 404);
     } catch (e) {
       return j({ ok: false, error: "server error: " + e.message }, 500);

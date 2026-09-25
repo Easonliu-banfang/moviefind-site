@@ -46,12 +46,22 @@ function wellStyle(id) {
 }
 function monogram(name) { return (name || "?").trim().charAt(0); }
 
-// 站点 favicon 回退链：favicon.ico → apple-touch-icon → 首字 monogram
+// 站点 favicon：先试 /favicon.ico，加载失败则 Worker 解析真实 URL，再失败回退 monogram
 function getFavicon(origin) {
   if (!origin) return null;
   try { return new URL("/favicon.ico", origin).href; } catch { return origin + "/favicon.ico"; }
 }
-function onFaviconErr(r) {
+// favicon 加载失败 → 调 Worker 解析站点 HTML 里的真实 icon URL
+async function onFaviconErr(r) {
+  if (r._faviconRetried) { r._noFavicon = true; return; }
+  r._faviconRetried = true;
+  try {
+    const res = await fetch(`${WORKER_BASE}/api/favicon?url=${encodeURIComponent(r.origin)}`, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.ok && data.url) { r.poster = null; r._faviconUrl = data.url; r._noFavicon = false; return; }
+    }
+  } catch { /* ignore */ }
   r._noFavicon = true;
 }
 
@@ -346,7 +356,7 @@ function demo(h) { kw.value = h; doSearch(); }
                 <div v-else class="site-fallback">
                   <div class="fb-pattern"></div>
                   <div class="fb-badge">
-                    <img v-if="!r._noFavicon" class="fb-icon" :src="getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                    <img v-if="!r._noFavicon" class="fb-icon" :src="r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
                     <span v-else class="fb-mono">{{ monogram(r.name) }}</span>
                   </div>
                   <div class="fb-name">{{ r.name }}</div>
@@ -381,7 +391,7 @@ function demo(h) { kw.value = h; doSearch(); }
                   <div v-else class="site-fallback">
                     <div class="fb-pattern"></div>
                     <div class="fb-badge">
-                      <img v-if="!r._noFavicon" class="fb-icon" :src="getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
+                      <img v-if="!r._noFavicon" class="fb-icon" :src="r._faviconUrl || getFavicon(r.origin)" alt="" @error="onFaviconErr(r)" />
                       <span v-else class="fb-mono">{{ monogram(r.name) }}</span>
                     </div>
                     <div class="fb-name">{{ r.name }}</div>
@@ -682,13 +692,16 @@ a { color: inherit; text-decoration: none; }
   object-fit: contain;
   border-radius: 6px;
 }
-/* monogram 回退（favicon 加载失败时） */
+/* monogram 回退（favicon 加载失败时）—— 大字标 + 站点名，看起来像品牌卡片 */
 .fb-mono {
   font-family: var(--serif);
-  font-size: 32px; font-weight: 700;
+  font-size: 40px; font-weight: 700;
   line-height: 1;
-  color: rgba(255,255,255,0.85);
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+  background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(255,255,255,0.6));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.2);
 }
 /* 站点名称 */
 .fb-name {
