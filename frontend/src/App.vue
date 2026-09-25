@@ -245,8 +245,7 @@ function demo(h) { kw.value = h; doSearch(); }
 
       <section class="hero">
         <div class="kicker">影视聚合检索 · CINEMA AGGREGATOR</div>
-        <h1 class="title">聚合追剧</h1>
-        <p class="lede">一个关键词，横扫 <b>{{ SITES.length }}</b> 个影视站点</p>
+        <h1 class="title">穷鬼影视</h1>
 
         <form class="search" @submit.prevent="doSearch">
           <span class="s-glyph" aria-hidden="true">⌕</span>
@@ -322,13 +321,16 @@ function demo(h) { kw.value = h; doSearch(); }
         <template v-else-if="searched && results.length">
           <div class="result-head">
             <h2>
-              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length }}</b> 个站点可达
-              <span v-if="enhancing" class="enhancing">· 核验中</span>
+              <b>{{ verified.length }}</b> 个有片源 · 共 <b>{{ verified.length + others.length }}</b> 个站点可达
+              <span v-if="enhancing" class="enhancing">
+                <span class="enh-frames"><i></i><i></i><i></i><i></i><i></i></span>
+                核验中
+              </span>
             </h2>
             <span class="result-sort">无广告 · 速度快 · 清晰度高 优先</span>
           </div>
 
-          <!-- 已确认有片源 -->
+          <!-- 有片源 -->
           <ol class="result-list" v-if="verified.length">
             <li v-for="(r, i) in verified" :key="r.id" class="card ok" :style="{ animationDelay: (i * 0.04) + 's' }">
               <div class="poster" :style="r.poster ? null : wellStyle(r.id)">
@@ -342,12 +344,11 @@ function demo(h) { kw.value = h; doSearch(); }
                   <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
                   <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
                   <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
-                  <span class="ok-badge">✓ 已确认</span>
                   <span class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
                   <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
                 </div>
                 <div v-if="r.title" class="card-title">匹配：{{ r.title }}</div>
-                <p class="card-tip" v-else>该站已确认有片源 · 可直接播放或搜该片</p>
+                <p class="card-tip" v-else>该站有片源 · 可直接播放或搜该片</p>
               </div>
               <div class="card-actions">
                 <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
@@ -378,7 +379,7 @@ function demo(h) { kw.value = h; doSearch(); }
                     <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
                     <span v-if="r.needsCaptcha" class="cap-badge">🔒 需验证</span>
                     <span v-else class="web-badge">🌐 站内搜</span>
-                    <span v-if="enhancing && !r.verified" class="v-spin" title="正在核验该站是否有片源"></span>
+                    <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验该站是否有片源"><i></i><i></i><i></i></span>
                     <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
                   </div>
                   <p class="card-tip" v-if="r.needsCaptcha">该站有人机验证 / 风控，跳转后请先通过再搜该片</p>
@@ -405,7 +406,7 @@ function demo(h) { kw.value = h; doSearch(); }
           暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
         </p>
 
-        <p v-else class="hint">输入片名，从 {{ SITES.length }} 个影视站聚合检索。全部站点即时可达，已验证有片源的站点会优先展示。</p>
+        <p v-else class="hint">输入片名，从 {{ SITES.length }} 个影视站聚合检索。全部站点即时可达，有片源的站点会优先展示。</p>
       </main>
       <footer class="foot">仅聚合跳转第三方影视站 · 本站不存储任何片源 · 请依法合规使用</footer>
     </div>
@@ -566,9 +567,14 @@ a { color: inherit; text-decoration: none; }
 .result-head { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 4px 16px; flex-wrap: wrap; gap: 6px; }
 .result-head h2 { font-size: 19px; font-weight: 700; letter-spacing: .3px; }
 .result-head h2 b { color: var(--accent); }
-.enhancing { color: var(--accent); font-size: 13px; font-weight: 400; display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; }
-.enhancing::before { content: ""; width: 11px; height: 11px; border: 2px solid var(--line2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
+.enhancing { color: var(--accent); font-size: 13px; font-weight: 400; display: inline-flex; align-items: center; gap: 8px; margin-left: 4px; }
+.enh-frames { display: inline-flex; gap: 2px; align-items: center; height: 12px; padding: 1px 3px; background: rgba(233,184,79,0.06); border: 1px solid rgba(233,184,79,0.12); border-radius: 4px; }
+.enh-frames i { display: block; width: 3px; background: var(--well); border: 1px solid var(--line2); animation: frame 1.4s ease-in-out infinite; }
+.enh-frames i:nth-child(1) { height: 5px; animation-delay: 0s; }
+.enh-frames i:nth-child(2) { height: 8px; animation-delay: .12s; }
+.enh-frames i:nth-child(3) { height: 12px; animation-delay: .24s; }
+.enh-frames i:nth-child(4) { height: 8px; animation-delay: .36s; }
+.enh-frames i:nth-child(5) { height: 5px; animation-delay: .48s; }
 .result-sort { color: var(--faint); font-size: 12px; letter-spacing: 1px; }
 
 .result-list { list-style: none; display: flex; flex-direction: column; gap: 11px; }
@@ -617,7 +623,6 @@ a { color: inherit; text-decoration: none; }
 .q-uhd { background: #39404f; color: #cfd6e2; }
 .q-tag { font-size: 10px; padding: 2px 7px; border-radius: 999px; background: var(--good-bg); color: var(--good); font-weight: 700; border: 1px solid #1f4a36; letter-spacing: .5px; }
 .q-tag.nominal { background: var(--well); color: var(--muted); border-color: var(--line2); }
-.ok-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--good-bg); color: var(--good); font-weight: 800; border: 1px solid #1f4a36; }
 .cap-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: #3a2a12; color: var(--warn); font-weight: 700; border: 1px solid #5a431f; }
 .web-badge { font-size: 11px; padding: 3px 10px; border-radius: 999px; background: var(--well); color: var(--muted); font-weight: 700; border: 1px solid var(--line2); }
 .st-tag { font-size: 10px; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid transparent; letter-spacing: .3px; }
@@ -630,7 +635,11 @@ a { color: inherit; text-decoration: none; }
 .card-tip { margin-top: 5px; color: var(--muted); font-size: 13px; }
 .hide-btn { margin-left: auto; width: 26px; height: 26px; flex-shrink: 0; border: 1px solid var(--line2); background: transparent; color: var(--faint); border-radius: 8px; cursor: pointer; font-size: 13px; line-height: 1; transition: .2s; }
 .hide-btn:hover { color: var(--danger); border-color: var(--danger); background: rgba(255,107,107,.08); }
-.v-spin { width: 14px; height: 14px; border: 2px solid var(--line2); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+.v-frames { display: inline-flex; gap: 2px; align-items: center; height: 14px; padding: 1px 3px; background: rgba(233,184,79,0.06); border: 1px solid rgba(233,184,79,0.12); border-radius: 4px; flex-shrink: 0; }
+.v-frames i { display: block; width: 2px; background: var(--well); border: 1px solid var(--line2); animation: frame 1.4s ease-in-out infinite; }
+.v-frames i:nth-child(1) { height: 5px; animation-delay: 0s; }
+.v-frames i:nth-child(2) { height: 9px; animation-delay: .15s; }
+.v-frames i:nth-child(3) { height: 5px; animation-delay: .3s; }
 .card-actions { display: flex; flex-direction: column; gap: 7px; align-items: stretch; flex-shrink: 0; }
 .go { padding: 9px 15px; border-radius: 11px; background: var(--panel2);
   font-size: 13px; color: var(--text); border: 1px solid var(--line2); font-weight: 700; transition: .2s; white-space: nowrap; text-align: center; }
@@ -665,7 +674,7 @@ a { color: inherit; text-decoration: none; }
   .card-actions .go { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .orb, .frames span, .scan i, .v-spin, .enhancing::before { animation: none !important; }
+  .orb, .frames span, .scan i, .v-frames i, .enh-frames i { animation: none !important; }
   .card { animation: none !important; }
 }
 </style>

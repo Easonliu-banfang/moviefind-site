@@ -47,8 +47,8 @@ export const SITES = [
     search: "{origin}/auete4so.php?searchword={kw}",
     templates: ["{origin}/auete4so.php?searchword={kw}", "{origin}/index.php/vod/search.html?wd={kw}"], captcha: true },
   { id: "darkvod", name: "黑夜影院", origin: "https://darkvod.com", quality: "1080P", qualityScore: 3,
-    search: "{origin}/tag/?wd={kw}&submit=",
-    templates: ["{origin}/tag/?wd={kw}&submit=", "{origin}/index.php?m=vod-search&wd={kw}", "{origin}/search.php?q={kw}"] },
+    search: "{origin}/index.php?m=vod-search&wd={kw}",
+    templates: ["{origin}/index.php?m=vod-search&wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}", "{origin}/search.php?q={kw}", "{origin}/tag/?wd={kw}&submit="] },
   { id: "nivod", name: "泥视频", origin: "https://www.nivod.vip", quality: "1080P", qualityScore: 3,
     search: "{origin}/index.php/vod/search.html?wd={kw}",
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
@@ -120,7 +120,7 @@ export const SITES = [
     templates: ["{origin}/vodsearch/-------------.html?wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
   { id: "yingmao-cangku", name: "影猫仓库", origin: "https://www.ymck.pro", quality: "1080P", qualityScore: 3,
     search: "{origin}/search.html?wd={kw}",
-    templates: ["{origin}/search.html?wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
+    templates: ["{origin}/search.html?wd={kw}"], noVerify: true },
   { id: "guangsu-yingshi", name: "光速影视", origin: "https://www.yingshiso.link", quality: "1080P", qualityScore: 3, captcha: true,
     search: "{origin}/search.php?searchword={kw}",
     templates: ["{origin}/search.php?searchword={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
@@ -213,7 +213,9 @@ function collectPosterCands(scope, origin, hints) {
     }
     if (POSTER_HINT_RE.test(nu)) score += 40;   // 路径像片库
     if (fromBg) score += 10;                    // CSS 背景图通常是海报位
-    if (/\.gif(\?|$)/i.test(nu)) score -= 200;  // 动图不作封面
+    // GIF 惩罚：默认动图不作封面，但站点自身的图片 CDN 常把静态海报也用 .gif 后缀（如 ifn.watch 的 /api/image/*.gif）
+    // —— 此时 label 已经强命中片名（score>=100）或路径已像片库（score>=40），GIF 惩罚不该再压过强信号。
+    if (/\.gif(\?|$)/i.test(nu) && score < 80) score -= 200;
     // 已实测硬 403 的图床（对所有 Referer 都返回 403，IP/TLS 层拦）——
     // 即便它在 HTML 里位置靠前、标签看着像封面，也几乎不可能加载成功，
     // 给它大幅降分，让前端优先选用同一站点上确实能访问的候选图。
@@ -617,6 +619,20 @@ async function probeSiteImpl(site, kw, proxyBase) {
   const start = Date.now();
   const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
     latency_ms: 0, title: null, pageUrl: null, poster: null, posterCand: [], searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
+  
+  // 聚合器/纯前端 SPA：无服务端搜索、无海报可解析 —— 只探测可达性，不解析片源、不提取封面
+  if (site.noVerify) {
+    const f = await fetchWithFallback(target, proxyBase);
+    const latency = Date.now() - start;
+    if (!f.html) {
+      if (f.isTimeout) return { ...base, latency_ms: latency };
+      return { ...base, dead: true, latency_ms: latency };
+    }
+    if (f.status >= 500 && f.status < 600) return { ...base, dead: true, latency_ms: latency };
+    if (f.status >= 400 && f.status < 600) return { ...base, needsCaptcha: true, blocked: true, latency_ms: latency };
+    return { ...base, latency_ms: latency };
+  }
+  
   const f = await fetchWithFallback(target, proxyBase);
   if (!f.html) {
     if (f.isTimeout) return base; // 超时：保守保留，交给浏览器
