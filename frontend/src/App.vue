@@ -82,26 +82,27 @@ function isVisible(r) {
 }
 
 const visibleCards = computed(() => results.value.filter(isVisible));
-// 置顶推荐（人工指定排第一的站，如独播库）—— 永远最前
+// 置顶推荐（人工指定，如独播库）—— 仅在该站确实搜到片源(或正在核验)时置顶，避免"没搜就排第一"
 const pinnedList = computed(() =>
-  visibleCards.value.filter((r) => r.pinned).sort((a, b) => rankScore(b) - rankScore(a))
+  visibleCards.value.filter((r) => r.pinned && (r.verified || enhancing.value)).sort((a, b) => rankScore(b) - rankScore(a))
 );
 // 已确认有片源（Worker 真的从站点抓到结果且无人机验证）→ 主按钮「立即播放」+ 次「搜该片」
 const verified = computed(() =>
   visibleCards.value
-    .filter((r) => r.verified && !r.needsCaptcha && !r.pinned)
+    .filter((r) => r.verified && !r.needsCaptcha && !r.pinned && !r.login)
     .sort((a, b) => rankScore(b) - rankScore(a) || a.latency_ms - b.latency_ms)
 );
 // 其余：被风控拦截 / SPA 站点 / 超时 —— 仍给出跳转，由用户浏览器去站内搜
 const others = computed(() =>
   visibleCards.value
-    .filter((r) => !(r.verified && !r.needsCaptcha) && !r.pinned)
+    .filter((r) => !(r.verified && !r.needsCaptcha) && !r.pinned && !r.login)
     .sort((a, b) => rankScore(b) - rankScore(a) || a.name.localeCompare(b.name, "zh"))
 );
-// 统计：服务端死站 / 浏览器侧连不上 / 用户手动隐藏
-const deadCount = computed(() => results.value.filter((r) => r.dead).length);
-const browserDeadCount = computed(() => results.value.filter((r) => r.browserDead).length);
-const autoHiddenCount = computed(() => deadCount.value + browserDeadCount.value);
+// 需登录的站：永远放最后（用户要求）
+const loginList = computed(() =>
+  visibleCards.value.filter((r) => r.login === true && !r.pinned).sort((a, b) => rankScore(b) - rankScore(a))
+);
+// 用户手动隐藏的站点
 const hiddenList = computed(() => results.value.filter((r) => hiddenIds.value.has(r.id)));
 
 // 非阻塞：Worker 可选核验，把已确认站点升级为 ✅ 立即播放，并回填「实测画质」
@@ -161,15 +162,18 @@ async function probeBrowserReachability() {
 async function doSearch() {
   const q = kw.value.trim();
   if (!q || loading.value) return;
-  loading.value = true; error.value = ""; searched.value = true;
+  loading.value = true; error.value = ""; searched.value = false;
   showOthers.value = true;
   view.value = "results";
-  // 本地即时渲染全部站点（不等待 Worker）
-  results.value = SITES.map((s) => makeCard(s, q));
-  loading.value = false;
-  // 后台并行：Worker 核验 + 浏览器侧可达性探测
-  enhanceWithWorker(q);
-  probeBrowserReachability();
+  // 短暂动画后本地即时渲染全部站点（不等待 Worker）
+  setTimeout(() => {
+    results.value = SITES.map((s) => makeCard(s, q));
+    searched.value = true;
+    loading.value = false;
+    // 后台并行：Worker 核验 + 浏览器侧可达性探测
+    enhanceWithWorker(q);
+    probeBrowserReachability();
+  }, 480);
 }
 function goHome() {
   view.value = "home";
@@ -244,13 +248,16 @@ function demo(h) { kw.value = h; doSearch(); }
       </header>
 
       <main class="content">
-        <p v-if="loading" class="hint loading">🔍 正在渲染全部站点…</p>
+        <div v-if="loading" class="search-anim">
+          <div class="dots"><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="txt">正在从 <b>{{ SITES.length }}</b> 个影视站检索《{{ kw }}》…</div>
+        </div>
         <p v-else-if="error" class="hint error">{{ error }}</p>
 
         <template v-else-if="searched && results.length">
           <div class="result-head">
             <h2>
-              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length + pinnedList.length }}</b> 个站点可达
+              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length + pinnedList.length + loginList.length }}</b> 个站点可达
               <span v-if="enhancing" class="enhancing">· 核验中…</span>
             </h2>
             <span class="result-sort">画质最高 · 无广告 · 免登录 优先</span>
@@ -260,9 +267,6 @@ function demo(h) { kw.value = h; doSearch(); }
             说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
           </p>
 
-          <p v-if="autoHiddenCount" class="hint-dead">
-            ⚠️ 已自动隐藏 <b>{{ autoHiddenCount }}</b> 个当前不可达的站点（服务端 5xx / DNS / 连接失败，或你的浏览器也连不上），它们现在打不开。被站点风控拦但你仍能打开的站保留；若某站你也被封，点卡片上的 ✕ 手动隐藏。
-          </p>
 
           <!-- 置顶推荐（人工指定排第一，如独播库） -->
           <p v-if="pinnedList.length" class="section-title">⭐ 推荐 · 无广告 · 免登录 · 速度快</p>
@@ -341,6 +345,29 @@ function demo(h) { kw.value = h; doSearch(); }
             </ol>
           </div>
 
+          <!-- 需登录的站点：永远放最后 -->
+          <div v-if="loginList.length" class="login-area">
+            <div class="login-head">🔒 以下 {{ loginList.length }} 个站点需先登录才能观看（排最后）</div>
+            <ol class="result-list">
+              <li v-for="(r, i) in loginList" :key="r.id" class="card neutral login">
+                <div class="rank">{{ i + 1 }}</div>
+                <div class="card-body">
+                  <div class="card-top">
+                    <span class="site-name">{{ r.name }}</span>
+                    <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
+                    <span class="q-tag nominal" title="站点标称画质，仅供参考">标称</span>
+                    <span class="st-tag st-warn">需登录</span>
+                    <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
+                  </div>
+                  <p class="card-tip">该站需注册 / 登录后才能播放，点「去站里搜」打开后登录再搜《{{ kw }}》</p>
+                </div>
+                <div class="card-actions">
+                  <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">去站里搜 ↗</a>
+                </div>
+              </li>
+            </ol>
+          </div>
+
           <!-- 用户手动隐藏的站点：恢复入口 -->
           <div v-if="hiddenList.length" class="hidden-area">
             <div class="hidden-head">已手动隐藏 {{ hiddenList.length }} 个站点（你被封 / 不想看到）</div>
@@ -351,7 +378,7 @@ function demo(h) { kw.value = h; doSearch(); }
           </div>
         </template>
 
-        <p v-else-if="searched && verified.length + others.length === 0" class="hint empty">
+        <p v-else-if="searched && verified.length + others.length + pinnedList.length + loginList.length === 0" class="hint empty">
           🙅 暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
         </p>
 
@@ -440,21 +467,35 @@ a { color: inherit; text-decoration: none; }
 
 .content { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 16px 16px 0; }
 .hint { color: var(--muted); text-align: center; padding: 30px 0; font-size: 14px; }
-.hint.loading { color: var(--accent); }
 .hint.error { color: var(--danger); }
+
+/* 搜索加载动画 */
+.search-anim { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 64px 0 40px; animation: fadeIn .3s ease both; }
+.search-anim .dots { display: flex; gap: 9px; }
+.search-anim .dots i { width: 11px; height: 11px; border-radius: 50%; background: linear-gradient(135deg, #ffe2a0, #e8862e); display: block; animation: bounce 1.2s infinite ease-in-out; }
+.search-anim .dots i:nth-child(2) { animation-delay: .12s; }
+.search-anim .dots i:nth-child(3) { animation-delay: .24s; }
+.search-anim .dots i:nth-child(4) { animation-delay: .36s; }
+.search-anim .dots i:nth-child(5) { animation-delay: .48s; }
+.search-anim .txt { color: var(--muted); font-size: 14px; letter-spacing: .5px; }
+.search-anim .txt b { color: var(--accent); }
+@keyframes bounce { 0%, 80%, 100% { transform: scale(.35); opacity: .35; } 40% { transform: scale(1); opacity: 1; } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .result-head { display: flex; justify-content: space-between; align-items: baseline; margin: 8px 4px 14px; flex-wrap: wrap; gap: 6px; }
 .result-head h2 { font-size: 18px; }
 .result-head h2 b { color: var(--accent); }
-.enhancing { color: var(--accent); font-size: 13px; font-weight: 400; }
+.enhancing { color: var(--accent); font-size: 13px; font-weight: 400; display: inline-flex; align-items: center; gap: 6px; }
+.enhancing::before { content: ""; width: 11px; height: 11px; border: 2px solid #2f3646; border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .result-sort { color: var(--muted); font-size: 12px; }
 .section-title { margin: 4px 4px 10px; font-size: 14px; font-weight: 700; color: var(--accent); }
 .hint-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: var(--panel); border: 1px solid #232836; border-radius: 12px; }
 .hint-note b { color: var(--text); }
-.hint-dead { color: #ffb3b3; font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: #1b1416; border: 1px solid #4a2a2e; border-radius: 12px; }
-.hint-dead b { color: #ff8c8c; }
 
-.result-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.result-list { list-style: none; display: flex; flex-direction: column; gap: 10px; animation: listIn .45s cubic-bezier(.2,.7,.3,1) both; }
+.others, .login-area { animation: listIn .45s cubic-bezier(.2,.7,.3,1) both; }
+@keyframes listIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .card {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px;
   background: var(--panel); border: 1px solid #232836; border-radius: 14px; transition: .2s;
@@ -504,6 +545,11 @@ a { color: inherit; text-decoration: none; }
 .others-toggle { width: 100%; text-align: left; cursor: pointer; background: transparent;
   border: 1px dashed #2f3646; color: var(--text); border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600; }
 .others-note { display: block; color: var(--muted); font-size: 12px; font-weight: 400; margin-top: 4px; }
+
+.login-area { margin-top: 16px; }
+.login-head { color: #c9a86a; font-size: 13px; font-weight: 600; margin: 0 4px 10px; }
+.card.login { opacity: .82; }
+.card.login:hover { opacity: 1; }
 
 .hidden-area { margin-top: 16px; padding: 12px 14px; background: var(--panel); border: 1px dashed #2f3646; border-radius: 12px; }
 .hidden-head { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
