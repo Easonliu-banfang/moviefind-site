@@ -68,18 +68,23 @@ function demo(h) { kw.value = h; doSearch(); }
           <span class="result-sort">已按「延迟优先 · 画质次之」排序</span>
         </div>
         <ol class="result-list">
-          <li v-for="(r, i) in results" :key="r.id" class="card">
-            <div class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</div>
+          <li v-for="(r, i) in results" :key="r.id" class="card" :class="{ locked: r.needsCaptcha }">
+            <div class="rank" :class="{ top: i < 3 && !r.needsCaptcha }">{{ i + 1 }}</div>
             <div class="card-body">
               <div class="card-top">
                 <span class="site-name">{{ r.name }}</span>
                 <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                <span class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
+                <span v-if="r.needsCaptcha" class="cap-badge">🔒 需验证</span>
+                <span v-else class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
               </div>
-              <div v-if="r.title" class="card-title">{{ r.title }}</div>
-              <p class="card-tip" v-else>该站已找到片源 · 点击直达</p>
+              <div v-if="r.title" class="card-title">匹配：{{ r.title }}</div>
+              <p class="card-tip" v-else-if="r.needsCaptcha">该站有人机验证，跳转后请先通过验证再搜该片</p>
+              <p class="card-tip" v-else>该站已找到片源 · 点击直达搜索页</p>
             </div>
-            <a class="go" :href="r.pageUrl || r.origin" target="_blank" rel="noopener noreferrer">前往播放 ↗</a>
+            <div class="card-actions">
+              <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
+              <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go ghost" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">直达详情</a>
+            </div>
           </li>
         </ol>
       </template>
@@ -148,6 +153,8 @@ h1 { font-size: 30px; letter-spacing: 2px; color: var(--accent); }
   background: var(--panel); border: 1px solid #232836; border-radius: 14px; transition: .2s;
 }
 .card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.card.locked { border-color: #5a431f; background: #1b1710; }
+.cap-badge { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: #3a2a12; color: #e6b455; font-weight: 700; border: 1px solid #5a431f; }
 .rank { width: 30px; height: 30px; flex-shrink: 0; display: grid; place-items: center;
   border-radius: 9px; background: var(--panel2); color: var(--muted); font-weight: 700; }
 .rank.top { background: linear-gradient(135deg, var(--accent), #e8862e); color: #1a1205; }
@@ -166,6 +173,9 @@ h1 { font-size: 30px; letter-spacing: 2px; color: var(--accent); }
 .go { flex-shrink: 0; padding: 8px 14px; border-radius: 10px; background: var(--panel2);
   font-size: 13px; color: var(--text); border: 1px solid #2f3646; font-weight: 600; transition: .2s; white-space: nowrap; }
 .go:hover { background: var(--accent); border-color: var(--accent); color: #1a1205; }
+.card-actions { display: flex; flex-direction: column; gap: 6px; align-items: stretch; flex-shrink: 0; }
+.go.ghost { background: transparent; border: 1px solid #2f3646; color: var(--muted); font-weight: 500; }
+.go.ghost:hover { color: var(--accent); border-color: var(--accent); background: transparent; }
 
 .hint.empty { color: #ffb3b3; }
 .foot { text-align: center; color: #50586a; font-size: 12px; margin-top: 40px; line-height: 1.8; }

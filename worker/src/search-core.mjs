@@ -5,6 +5,9 @@ const REQUEST_TIMEOUT_MS = 9000;
 export const MAX_CONCURRENT = 10;
 export const MAX_TEMPLATES_PER_SITE = 2;
 
+// 人机验证 / 反爬挑战页识别（命中即标记 needsCaptcha，不强行判定有片源）
+export const CAPTCHA_PATS = /验证码|人机验证|安全验证|滑动验证|点击验证|行为验证|拖动验证|完成验证|验证中心|请.*通过.*验证|verify\s+you\s+are\s+human|are\s+you\s+a\s+human|recaptcha|turnstile|cf[-_]?chl|challenge[-_]?platform|just\s+a\s+moment|checking\s+your\s+browser|security\s+check|access\s+denied|robot\s+check/i;
+
 export const SITES = [
   { id: "sorani", name: "青空次元", origin: "https://www.sorani.net", quality: "1080P", qualityScore: 3,
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
@@ -22,7 +25,7 @@ export const SITES = [
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
   { id: "duse91", name: "91毒舌", origin: "https://www.duse0.com", quality: "1080P", qualityScore: 3,
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
-  { id: "ifn", name: "IFN", origin: "https://ifn.watch/register", quality: "4K", qualityScore: 5,
+  { id: "ifn", name: "IFN", origin: "https://ifn.watch", quality: "4K", qualityScore: 5,
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
   { id: "fdzys", name: "饭搭子影视", origin: "https://fdzys.com", quality: "1080P", qualityScore: 3,
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
@@ -92,27 +95,32 @@ function abs(path, origin) {
   return origin.replace(/\/+$/, "") + (path.startsWith("/") ? path : "/" + path);
 }
 
-// 从HTML解析: has / title / pageUrl / liveQuality / liveScore
+// 从HTML解析: has / title / pageUrl / liveQuality / liveScore / needsCaptcha
 // 判定策略（双保险，最大限度避免误判）：
 //   1) 页面必须真实包含搜索关键词 —— 证明这页确实是关于该片的搜索结果；
-//   2) 详情链接(detail/voddetail/vodshort)数 >= 2 —— 证明是结果列表而非导航栏/页脚残留。
+//   2) 详情链接(detail/voddetail/vodshort/play)数 >= 2 —— 证明是结果列表而非导航栏/页脚残留。
 export function parseResultPage(html, origin, kw) {
   const emptyPats = /没有找到|没有相关|暂无.*结果|搜索不到|没有您要找|抱歉.*没有|not\s*found|暂无该|查无此|未找到相关/i;
-  if (emptyPats.test(html)) return { has: false };
+
+  // 人机验证 / 反爬挑战页：能打开但被拦截，无法确认片源，单独标记（不计入有片源）
+  if (CAPTCHA_PATS.test(html)) return { has: false, needsCaptcha: true, captcha: true, pageUrl: null, title: null };
+
+  if (emptyPats.test(html)) return { has: false, needsCaptcha: false };
+
   // 关键词必须命中（去掉空格做容错，如「流浪地球 2」与「流浪地球2」）
   const kwNorm = (kw || "").replace(/\s+/g, "");
   const hitKw = kwNorm && (html.includes(kw) || html.includes(kwNorm) ||
     html.replace(/&nbsp;|&#?\w+;/g, "").includes(kwNorm) ||
     html.replace(/<[^>]+>/g, "").includes(kwNorm));
-  if (!hitKw) return { has: false };
+  if (!hitKw) return { has: false, needsCaptcha: false };
 
-  const detailRe = /href="[^"]*?(?:voddetail|vodshort|detail)\/[^"]*\.html?"/gi;
+  const detailRe = /href="[^"]*?(?:voddetail|vodshort|detail|play)\/[^"]*\.html?"/gi;
   const detailMatches = html.match(detailRe) || [];
   const detailCount = detailMatches.length;
   // 取第一个详情链接作为跳转目标，并抓取链接文字作为片名（比 h2-h4 更准）
-  const firstM = html.match(/href="([^"]*?(?:voddetail|vodshort|detail)\/[^"]*\.html?)"/i);
+  const firstM = html.match(/href="([^"]*?(?:voddetail|vodshort|detail|play)\/[^"]*\.html?)"/i);
   const detailPath = firstM ? firstM[1] : null;
-  const titleM = html.match(/<a[^>]*href="[^"]*?(?:voddetail|vodshort|detail)\/[^"]*\.html?"[^>]*>\s*([^<]{2,40}?)\s*<\/a>/i);
+  const titleM = html.match(/<a[^>]*href="[^"]*?(?:voddetail|vodshort|detail|play)\/[^"]*\.html?"[^>]*>\s*([^<]{2,40}?)\s*<\/a>/i);
   let title = titleM ? titleM[1].trim() : null;
 
   // 兜底标题：结果页的 h2-h4
@@ -137,7 +145,7 @@ export function parseResultPage(html, origin, kw) {
 
   const hasIndex = detailCount >= 2;
   return { has: hasIndex, title, detailPath, liveQuality, liveScore,
-           pageUrl: detailPath ? abs(detailPath, origin) : null };
+           pageUrl: detailPath ? abs(detailPath, origin) : null, needsCaptcha: false, detailCount };
 }
 
 // 诊断用：返回单站可达性详情（不严格判定，只看能否拿到含关键词的页面）
@@ -152,16 +160,23 @@ export async function probeSiteDebug(site, kw) {
     });
     const latency = Date.now() - start;
     const html = await res.text();
-    const parsed = parseResultPage(html, origin);
-    return { name: site.name, status: res.status, ok: true, latency, has: parsed.has, kwInHtml: html.includes(kw), len: html.length };
+    const parsed = parseResultPage(html, origin, kw);
+    const detailRe = /href="[^"]*?(?:voddetail|vodshort|detail|play)\/[^"]*\.html?"/gi;
+    const detailCount = (html.match(detailRe) || []).length;
+    return { name: site.name, origin, status: res.status, ok: true, latency,
+             has: parsed.has, needsCaptcha: !!parsed.needsCaptcha, kwInHtml: html.includes(kw),
+             detailCount, len: html.length, searchUrl: tpl, tpl };
   } catch (e) {
-    return { name: site.name, ok: false, error: String(e).slice(0, 60), latency: Date.now() - start };
+    return { name: site.name, origin, ok: false, error: String(e).slice(0, 60), latency: Date.now() - start, searchUrl: tpl, tpl };
   }
 }
 
 // 逐个模板探测一个站
 export async function probeSite(site, kw) {
   const origin = site.origin;
+  // 主搜索页 URL（已带关键词）—— 前端点击跳转的目标，保证「跳到已搜关键词的页面」
+  const searchUrl = (site.templates[0] || "").replace("{origin}", origin).replace("{kw}", encodeURIComponent(kw));
+  let captchaSeen = false;
   for (const tpl of site.templates.slice(0, MAX_TEMPLATES_PER_SITE)) {
     const target = tpl.replace("{origin}", origin).replace("{kw}", encodeURIComponent(kw));
     const start = Date.now();
@@ -177,11 +192,21 @@ export async function probeSite(site, kw) {
     if (!res || !res.ok || res.status >= 400) continue;
     const html = await res.text();
     const parsed = parseResultPage(html, origin, kw);
+    if (parsed.needsCaptcha) { captchaSeen = true; continue; } // 换模板再试，仍可能被拦
     if (!parsed.has) continue;
     return {
       id: site.id, name: site.name, origin, quality: parsed.liveQuality || site.quality,
       qualityScore: parsed.liveScore || site.qualityScore,
-      latency_ms: latency, title: parsed.title || null, pageUrl: parsed.pageUrl || target,
+      latency_ms: latency, title: parsed.title || null,
+      pageUrl: parsed.pageUrl || target, searchUrl, needsCaptcha: false,
+    };
+  }
+  // 多个模板都撞上人机验证 → 仍返回该站（排末尾、标需验证），让用户在浏览器里过验证
+  if (captchaSeen) {
+    return {
+      id: site.id, name: site.name, origin, quality: site.quality,
+      qualityScore: site.qualityScore, latency_ms: 0, title: null,
+      pageUrl: null, searchUrl, needsCaptcha: true,
     };
   }
   return null;
@@ -201,7 +226,11 @@ export const run = {
       const r = await probeSite(site, kw);
       if (r) out.push(r);
     });
-    out.sort((a, b) => (a.latency_ms - b.latency_ms) || (b.qualityScore - a.qualityScore));
+    // 排序：先正常有片源（延迟升序、画质次之），人机验证站统一排末尾
+    out.sort((a, b) =>
+      ((a.needsCaptcha ? 1 : 0) - (b.needsCaptcha ? 1 : 0)) ||
+      (a.latency_ms - b.latency_ms) ||
+      (b.qualityScore - a.qualityScore));
     return out.slice(0, max);
   }
 };
