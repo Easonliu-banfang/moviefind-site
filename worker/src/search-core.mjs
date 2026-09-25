@@ -7,8 +7,10 @@ export const MAX_CONCURRENT = 14;
 // 一个站最多尝试的验证模板数（见 templates）
 export const MAX_TEMPLATES_PER_SITE = 5;
 
-// 人机验证 / 反爬挑战页识别（命中即标记 needsCaptcha，不强行判定有片源）
-export const CAPTCHA_PATS = /验证码|人机验证|安全验证|滑动验证|点击验证|行为验证|拖动验证|完成验证|验证中心|请.*通过.*验证|verify\s+you\s+are\s+human|are\s+you\s+a\s+human|recaptcha|turnstile|cf[-_]?chl|challenge[-_]?platform|just\s+a\s+moment|checking\s+your\s+browser|security\s+check|access\s+denied|robot\s+check|五秒|5秒|访问验证|防cc|防刷|二次验证|请输入验证码|滑动拼图|系统安全验证/i;
+// 人机验证 / 反爬挑战页识别（只在「无结果」时才用来标记 needsCaptcha）
+// 注意：刻意只保留强特征（recaptcha/turnstile/请滑动/请输入验证码 等），
+// 去掉「安全验证/防刷/二次验证/5秒」等页脚常见字样，避免误杀有结果的正常页。
+export const CAPTCHA_PATS = /请完成验证|请滑动|滑动验证|点击验证|拖动验证|行为验证|请输入验证码|滑动拼图|图文验证|人机验证|verify\s+you\s+are\s+human|are\s+you\s+a\s+human|recaptcha|turnstile|cf[-_]?chl|challenge[-_]?platform|just\s+a\s+moment|checking\s+your\s+browser|security\s+check|access\s+denied|robot\s+check/i;
 
 // 站点级硬拦截状态码（WAF / Cloudflare / 限流 / 网关）—— 数据中心IP常被拦，标记为「需验证/被拦截」而非静默丢弃
 export const BLOCKED_STATUS = new Set([401, 403, 406, 412, 419, 429, 451, 499, 501, 503, 520, 521, 522, 523, 524, 525, 526, 850]);
@@ -168,10 +170,6 @@ function siteTemplates(site) {
 export function parseResultPage(html, origin, kw) {
   const emptyPats = /没有找到|没有相关|暂无.*结果|搜索不到|没有您要找|抱歉.*没有|not\s*found|暂无该|查无此|未找到相关|未查询到|没有匹配/i;
 
-  if (CAPTCHA_PATS.test(html)) return { has: false, needsCaptcha: true, captcha: true, pageUrl: null, title: null, detailCount: 0 };
-
-  if (emptyPats.test(html)) return { has: false, needsCaptcha: false, detailCount: 0 };
-
   const kwNorm = (kw || "").replace(/\s+/g, "");
   const kwSafe = kw || "";
   const textNoTag = html.replace(/<[^>]+>/g, "");
@@ -179,49 +177,63 @@ export function parseResultPage(html, origin, kw) {
     html.includes(kwSafe) || html.includes(kwNorm) ||
     textNoTag.includes(kwNorm) ||
     textNoTag.replace(/&nbsp;|&#?\w+;/g, "").includes(kwNorm));
-  if (!hitKw) return { has: false, needsCaptcha: false, detailCount: 0 };
 
   const lenient = [...html.matchAll(
     new RegExp(`href="([^"]*?(?:${DETAIL_RE_SRC})[^"]*?)"`, "gi")
   )];
   const detailCount = lenient.length;
 
-  const anchored = [...html.matchAll(
-    new RegExp(`<a\\b[^>]*href="([^"]*?(?:${DETAIL_RE_SRC})[^"]*?)"[^>]*>([\\s\\S]*?)<\\/a>`, "gi")
-  )];
-  const chosen =
-    anchored.find((a) => DETAIL_PRIORITY.test(a[1])) ||
-    anchored.find((a) => PLAY_PRIORITY.test(a[1])) ||
-    anchored[0] || lenient[0] || null;
-  const detailPath = chosen ? chosen[1] : null;
-  let title = chosen && chosen[2] ? chosen[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 40) : null;
+  // 1) 真实结果优先：含关键词 + 存在「文字含关键词」的详情/播放链接 → 判定有片源并直链该结果。
+  //    绝不被页脚偶发「验证/安全」字样误杀；也只链真正的搜索结果，不链导航/热门侧栏。
+  if (hitKw && detailCount >= 1) {
+    const anchored = [...html.matchAll(
+      new RegExp(`<a\\b[^>]*href="([^"]*?(?:${DETAIL_RE_SRC})[^"]*?)"[^>]*>([\\s\\S]*?)<\\/a>`, "gi")
+    )];
+    // 只认「链接文字含关键词」的链接 = 真正的搜索结果（排除页内导航/侧栏热门）
+    const matched = anchored.filter((a) => (a[2] || "").includes(kwSafe));
+    if (matched.length) {
+      const chosen =
+        matched.find((a) => DETAIL_PRIORITY.test(a[1])) ||
+        matched.find((a) => PLAY_PRIORITY.test(a[1])) ||
+        matched[0];
+      const detailPath = chosen ? chosen[1] : null;
+      let title = chosen && chosen[2] ? chosen[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim().slice(0, 40) : null;
 
-  if (!title && lenient[0]) {
-    const idx = html.indexOf(lenient[0][1]);
-    const near = html.slice(Math.max(0, idx - 60), idx);
-    const tM = near.match(/>([^<>]{2,40})<\/a>\s*$/) || near.match(/["']name["']\s*:\s*["']([^"']{2,40})["']/);
-    if (tM) title = tM[1].trim();
-  }
-  if (!title) {
-    const hM = html.match(/<h[2-4][^>]*>\s*([^<]{2,60}?)\s*<\/h[2-4]>/i);
-    if (hM) title = hM[1].trim();
+      if (!title && lenient[0]) {
+        const idx = html.indexOf(lenient[0][1]);
+        const near = html.slice(Math.max(0, idx - 60), idx);
+        const tM = near.match(/>([^<>]{2,40})<\/a>\s*$/) || near.match(/["']name["']\s*:\s*["']([^"']{2,40})["']/);
+        if (tM) title = tM[1].trim();
+      }
+      if (!title) {
+        const hM = html.match(/<h[2-4][^>]*>\s*([^<]{2,60}?)\s*<\/h[2-4]>/i);
+        if (hM) title = hM[1].trim();
+      }
+
+      let liveQuality = "", liveScore = 0;
+      let m = html.match(/<[^>]*>(4K|蓝光|1080P|1080|超清|高清|720P)<\/[^>]*>/i) ||
+              html.match(/<(?:em|i|span|b)[^>]*>(4K|蓝光|1080P|超清|高清)<\/[^>]*>/i);
+      if (!m) m = html.match(/(4K|蓝光|1080P|超清|高清)/i);
+      if (m) {
+        const t = m[1].toLowerCase();
+        if (t.includes("4k")) { liveQuality = "4K"; liveScore = 5; }
+        else if (t.includes("蓝光")) { liveQuality = "蓝光"; liveScore = 4; }
+        else if (t.includes("1080")) { liveQuality = "1080P"; liveScore = 3; }
+        else if (t.includes("720")) { liveQuality = "720P"; liveScore = 2; }
+        else if (t.includes("高清") || t.includes("超清")) { liveQuality = "高清"; liveScore = 2; }
+      }
+
+      return { has: true, title, detailPath, liveQuality, liveScore,
+               pageUrl: detailPath ? abs(detailPath, origin) : null, needsCaptcha: false, detailCount };
+    }
+    // 有详情链接但文字均不含关键词（图片结果等）→ 不强行给立即播放，退回普通跳转
   }
 
-  let liveQuality = "", liveScore = 0;
-let m = html.match(/<[^>]*>(4K|蓝光|1080P|1080|超清|高清|720P)<\/[^>]*>/i) ||
-      html.match(/<(?:em|i|span|b)[^>]*>(4K|蓝光|1080P|超清|高清)<\/[^>]*>/i);
-  if (!m) m = html.match(/(4K|蓝光|1080P|超清|高清)/i);
-  if (m) {
-    const t = m[1].toLowerCase();
-    if (t.includes("4k")) { liveQuality = "4K"; liveScore = 5; }
-    else if (t.includes("蓝光")) { liveQuality = "蓝光"; liveScore = 4; }
-    else if (t.includes("1080")) { liveQuality = "1080P"; liveScore = 3; }
-    else if (t.includes("720")) { liveQuality = "720P"; liveScore = 2; }
-    else if (t.includes("高清") || t.includes("超清")) { liveQuality = "高清"; liveScore = 2; }
-  }
-
-  return { has: detailCount >= 1, title, detailPath, liveQuality, liveScore,
-           pageUrl: detailPath ? abs(detailPath, origin) : null, needsCaptcha: false, detailCount };
+  // 2) 无结果时才判定验证码 / 空页（不影响上面已确认有片源的站）
+  if (CAPTCHA_PATS.test(html)) return { has: false, needsCaptcha: true, captcha: true, pageUrl: null, title: null, detailCount: 0 };
+  if (emptyPats.test(html)) return { has: false, needsCaptcha: false, detailCount: 0 };
+  if (!hitKw) return { has: false, needsCaptcha: false, detailCount: 0 };
+  return { has: false, needsCaptcha: false, detailCount };
 }
 
 // 诊断用：单站可达性（首模板）

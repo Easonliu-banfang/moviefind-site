@@ -134,6 +134,10 @@ function demo(h) { kw.value = h; doSearch(); }
           <span class="result-sort">已确认优先 · 其余按画质排序</span>
         </div>
 
+        <p v-if="!enhancing && verified.length === 0" class="hint-note">
+          说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
+        </p>
+
         <!-- 已确认有片源 -->
         <ol class="result-list" v-if="verified.length">
           <li v-for="(r, i) in verified" :key="r.id" class="card ok">
@@ -172,7 +176,7 @@ function demo(h) { kw.value = h; doSearch(); }
                   <span v-else class="web-badge">🌐 去站里搜</span>
                 </div>
                 <p class="card-tip" v-if="r.needsCaptcha">该站有人机验证/风控，跳转后请先通过再搜该片</p>
-                <p class="card-tip" v-else>该站结果需在你浏览器内加载，点下方按钮直达搜索页</p>
+                <p class="card-tip" v-else>点「搜该片」直达该站已搜《{{ kw }}》的结果页，打开即能播放</p>
               </div>
               <div class="card-actions">
                 <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
@@ -240,6 +244,8 @@ h1 { font-size: 30px; letter-spacing: 2px; color: var(--accent); }
 .result-head h2 b { color: var(--accent); }
 .enhancing { color: var(--accent); font-size: 13px; font-weight: 400; }
 .result-sort { color: var(--muted); font-size: 12px; }
+.hint-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: var(--panel); border: 1px solid #232836; border-radius: 12px; }
+.hint-note b { color: var(--text); }
 
 .result-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .card {
