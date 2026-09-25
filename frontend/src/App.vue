@@ -12,7 +12,8 @@ const loading = ref(false);
 const enhancing = ref(false);
 const error = ref("");
 const searched = ref(false);
-const showOthers = ref(true); // 其余站点默认展开，证明全部可达
+const showOthers = ref(true);
+const view = ref("home"); // 'home' 落地页 | 'results' 结果页
 
 // 用户手动隐藏的站点（localStorage 持久化）—— 针对「我自己的 IP / 设备 / 浏览器被某站封了」的情况
 const HIDDEN_KEY = "moviefind_hidden_sites";
@@ -27,7 +28,7 @@ function hideSite(id) { hiddenIds.value.add(id); saveHidden(); }
 function unhideSite(id) { hiddenIds.value.delete(id); saveHidden(); }
 function unhideAll() { hiddenIds.value = new Set(); saveHidden(); }
 
-const demoHits = ["狂飙", "流浪地球2", "三体", "孤注一掷", "繁花"];
+const demoHits = ["狂飙", "流浪地球2", "三体", "孤注一掷", "繁花", "年会不能停"];
 
 function qualityClass(q) {
   const map = { "4K": "q-4k", "蓝光": "q-bd", "1080P": "q-hd", "720P": "q-hd", "高清": "q-hd", "HD": "q-hd" };
@@ -46,17 +47,27 @@ function makeCard(site, q) {
     name: site.name,
     quality: site.quality,
     qualityScore: site.qualityScore || 3,
-    realQuality: false, // 是否为 Worker 实测画质（否则为站点标称，仅供参考）
+    ads: site.ads ?? false,       // 无广告（默认干净；可在数据里标 true 沉底）
+    login: site.login ?? false,   // 免登录（默认免登录；标 true 沉底）
+    realQuality: false,           // 是否为 Worker 实测画质（否则为站点标称，仅供参考）
     origin: site.origin,
     searchUrl: buildSearchUrl(site, q),
     verified: false,
     needsCaptcha: !!site.captcha,
     dead: false,
-    browserDead: false, // 浏览器侧（用户自己的网络）连不上 → 自动隐藏
+    browserDead: false,           // 浏览器侧（用户自己的网络）连不上 → 自动隐藏
     pageUrl: null,
     title: null,
     latency_ms: 0,
   };
+}
+
+// 综合排序分：画质最高 > 无广告·免登录 > 已确认有片源 > 延迟低
+function rankScore(r) {
+  const q = r.qualityScore || 0;
+  const clean = (r.ads === false && r.login === false) ? 1 : 0;
+  const verified = r.verified ? 1 : 0;
+  return q * 100 + (clean ? 40 : 0) + (verified ? 10 : 0);
 }
 
 // 可见性：排除 服务端死站(dead) / 浏览器侧连不上(browserDead) / 用户手动隐藏(hidden)
@@ -67,13 +78,15 @@ function isVisible(r) {
 const visibleCards = computed(() => results.value.filter(isVisible));
 // 已确认有片源（Worker 真的从站点抓到结果且无人机验证）→ 主按钮「立即播放」+ 次「搜该片」
 const verified = computed(() =>
-  visibleCards.value.filter((r) => r.verified && !r.needsCaptcha).sort((a, b) => a.latency_ms - b.latency_ms)
+  visibleCards.value
+    .filter((r) => r.verified && !r.needsCaptcha)
+    .sort((a, b) => rankScore(b) - rankScore(a) || a.latency_ms - b.latency_ms)
 );
 // 其余：被风控拦截 / SPA 站点 / 超时 —— 仍给出跳转，由用户浏览器去站内搜
 const others = computed(() =>
   visibleCards.value
     .filter((r) => !(r.verified && !r.needsCaptcha))
-    .sort((a, b) => (b.qualityScore - a.qualityScore) || a.name.localeCompare(b.name, "zh"))
+    .sort((a, b) => rankScore(b) - rankScore(a) || a.name.localeCompare(b.name, "zh"))
 );
 // 统计：服务端死站 / 浏览器侧连不上 / 用户手动隐藏
 const deadCount = computed(() => results.value.filter((r) => r.dead).length);
@@ -140,6 +153,7 @@ async function doSearch() {
   if (!q || loading.value) return;
   loading.value = true; error.value = ""; searched.value = true;
   showOthers.value = true;
+  view.value = "results";
   // 本地即时渲染全部站点（不等待 Worker）
   results.value = SITES.map((s) => makeCard(s, q));
   loading.value = false;
@@ -147,164 +161,248 @@ async function doSearch() {
   enhanceWithWorker(q);
   probeBrowserReachability();
 }
+function goHome() {
+  view.value = "home";
+  searched.value = false;
+  results.value = [];
+  kw.value = "";
+}
 function onKey(e) { if (e.key === "Enter") doSearch(); }
 function demo(h) { kw.value = h; doSearch(); }
 </script>
 
 <template>
-  <div class="shell">
-    <header class="hero">
-      <div class="logo">🎬</div>
-      <h1>聚合追剧</h1>
-      <p class="sub">一个关键词 · 横扫 <b>{{ SITES.length }}</b> 个影视站 · 不可达自动隐藏 · 可手动屏蔽被封站点</p>
+  <div class="app">
+    <!-- ============ 落地主页 ============ -->
+    <div v-if="view === 'home'" class="home">
+      <section class="hero">
+        <div class="logo">🎬</div>
+        <h1>聚合追剧</h1>
+        <p class="tag">一个关键词，横扫 <b>{{ SITES.length }}</b> 个影视站</p>
+        <p class="sub">画质最高 · 无广告 · 免登录 的站自动排最前</p>
 
-      <div class="searchbar">
-        <input
-          v-model="kw"
-          @keyup="onKey"
-          placeholder="输入片名 / 剧名 / 演员…"
-          maxlength="30"
-        />
-        <button :disabled="loading" @click="doSearch">{{ loading ? "搜索中…" : "搜索" }}</button>
-      </div>
+        <form class="search" @submit.prevent="doSearch">
+          <input
+            v-model="kw"
+            @keyup="onKey"
+            placeholder="输入片名 / 剧名 / 演员…"
+            maxlength="30"
+            autofocus
+          />
+          <button type="submit" :disabled="loading">{{ loading ? "搜索中…" : "搜索" }}</button>
+        </form>
 
-      <div class="hot">
-        <span class="hot-tag">热门</span>
-        <button v-for="h in demoHits" :key="h" @click="demo(h)" class="chip">{{ h }}</button>
-      </div>
-    </header>
-
-    <main class="content">
-      <p v-if="loading" class="hint loading">🔍 正在渲染全部站点…</p>
-      <p v-else-if="error" class="hint error">{{ error }}</p>
-
-      <template v-else-if="searched && results.length">
-        <div class="result-head">
-          <h2>
-            <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length }}</b> 个站点可达
-            <span v-if="enhancing" class="enhancing">· 核验中…</span>
-          </h2>
-          <span class="result-sort">已确认优先 · 其余按画质排序</span>
+        <div class="hot">
+          <span class="hot-label">热门</span>
+          <button v-for="h in demoHits" :key="h" class="chip" @click="demo(h)">{{ h }}</button>
         </div>
 
-        <p v-if="!enhancing && verified.length === 0" class="hint-note">
-          说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
-        </p>
+        <div class="features">
+          <div class="feature">
+            <div class="f-ico">🏆</div>
+            <b>画质优先</b>
+            <span>4K / 蓝光 自动置顶</span>
+          </div>
+          <div class="feature">
+            <div class="f-ico">🚫</div>
+            <b>无广告优先</b>
+            <span>免登录站靠前</span>
+          </div>
+          <div class="feature">
+            <div class="f-ico">✅</div>
+            <b>实时核验</b>
+            <span>确认有片源才绿标</span>
+          </div>
+          <div class="feature">
+            <div class="f-ico">🛡️</div>
+            <b>自动隐藏</b>
+            <span>打不开的站自动消失</span>
+          </div>
+        </div>
+      </section>
+      <footer class="foot">仅聚合跳转第三方影视站 · 本站不存储任何片源 · 请依法合规使用</footer>
+    </div>
 
-        <p v-if="autoHiddenCount" class="hint-dead">
-          ⚠️ 已自动隐藏 <b>{{ autoHiddenCount }}</b> 个当前不可达的站点（服务端 5xx / DNS / 连接失败，或你的浏览器也连不上），它们现在打不开。被站点风控拦但你仍能打开的站保留；若某站你也被封，点卡片上的 ✕ 手动隐藏。
-        </p>
+    <!-- ============ 搜索结果页 ============ -->
+    <div v-else class="results">
+      <header class="topbar">
+        <button class="back" @click="goHome" title="返回首页">‹</button>
+        <form class="search compact" @submit.prevent="doSearch">
+          <input v-model="kw" @keyup="onKey" placeholder="搜索片名 / 剧名…" maxlength="30" />
+          <button type="submit">搜</button>
+        </form>
+      </header>
 
-        <!-- 已确认有片源 -->
-        <ol class="result-list" v-if="verified.length">
-          <li v-for="(r, i) in verified" :key="r.id" class="card ok">
-            <div class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</div>
-            <div class="card-body">
-              <div class="card-top">
-                <span class="site-name">{{ r.name }}</span>
-                <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
-                <span class="ok-badge">✅ 已确认</span>
-                <span class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
-                <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
-              </div>
-              <div v-if="r.title" class="card-title">匹配：{{ r.title }}</div>
-              <p class="card-tip" v-else>该站已确认有片源 · 可直接播放或搜该片</p>
-            </div>
-            <div class="card-actions">
-              <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
-              <a class="go ghost" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-            </div>
-          </li>
-        </ol>
+      <main class="content">
+        <p v-if="loading" class="hint loading">🔍 正在渲染全部站点…</p>
+        <p v-else-if="error" class="hint error">{{ error }}</p>
 
-        <!-- 其余：去站内搜索（默认展开） -->
-        <div v-if="others.length" class="others">
-          <button class="others-toggle" @click="showOthers = !showOthers">
-            {{ showOthers ? "▾" : "▸" }} 其余 {{ others.length }} 个站点（点击去站内搜索）
-            <span class="others-note">部分站点对机房IP风控 / 为JS渲染，由你浏览器打开后搜</span>
-          </button>
-          <ol class="result-list" v-if="showOthers">
-            <li v-for="(r, i) in others" :key="r.id" class="card neutral" :class="{ locked: r.needsCaptcha }">
-              <div class="rank">{{ verified.length + i + 1 }}</div>
+        <template v-else-if="searched && results.length">
+          <div class="result-head">
+            <h2>
+              <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ verified.length + others.length }}</b> 个站点可达
+              <span v-if="enhancing" class="enhancing">· 核验中…</span>
+            </h2>
+            <span class="result-sort">画质最高 · 无广告 · 免登录 优先</span>
+          </div>
+
+          <p v-if="!enhancing && verified.length === 0" class="hint-note">
+            说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
+          </p>
+
+          <p v-if="autoHiddenCount" class="hint-dead">
+            ⚠️ 已自动隐藏 <b>{{ autoHiddenCount }}</b> 个当前不可达的站点（服务端 5xx / DNS / 连接失败，或你的浏览器也连不上），它们现在打不开。被站点风控拦但你仍能打开的站保留；若某站你也被封，点卡片上的 ✕ 手动隐藏。
+          </p>
+
+          <!-- 已确认有片源 -->
+          <ol class="result-list" v-if="verified.length">
+            <li v-for="(r, i) in verified" :key="r.id" class="card ok">
+              <div class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</div>
               <div class="card-body">
-              <div class="card-top">
-                <span class="site-name">{{ r.name }}</span>
-                <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                <span class="q-tag nominal" title="站点标称画质，仅供参考">标称</span>
-                <span v-if="r.needsCaptcha" class="cap-badge">🔒 去站里搜</span>
-                <span v-else class="web-badge">🌐 去站里搜</span>
-                <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
-              </div>
-                <p class="card-tip" v-if="r.needsCaptcha">该站有人机验证/风控，跳转后请先通过再搜该片</p>
-                <p class="card-tip" v-else>点「搜该片」直达该站已搜《{{ kw }}》的结果页，打开即能播放</p>
+                <div class="card-top">
+                  <span class="site-name">{{ r.name }}</span>
+                  <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
+                  <span class="q-tag" :class="{ nominal: !r.realQuality }" :title="r.realQuality ? 'Worker 实测画质' : '站点标称画质，仅供参考'">{{ r.realQuality ? '实测' : '标称' }}</span>
+                  <span class="ok-badge">✅ 已确认</span>
+                  <span class="latency" :class="{ fast: r.latency_ms < 1500 }">⚡ {{ r.latency_ms }}ms</span>
+                  <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
+                </div>
+                <div v-if="r.title" class="card-title">匹配：{{ r.title }}</div>
+                <p class="card-tip" v-else>该站已确认有片源 · 可直接播放或搜该片</p>
               </div>
               <div class="card-actions">
-                <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
+                <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
+                <a class="go ghost" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
               </div>
             </li>
           </ol>
-        </div>
 
-        <!-- 用户手动隐藏的站点：恢复入口 -->
-        <div v-if="hiddenList.length" class="hidden-area">
-          <div class="hidden-head">已手动隐藏 {{ hiddenList.length }} 个站点（你被封 / 不想看到）</div>
-          <div class="hidden-chips">
-            <button v-for="r in hiddenList" :key="r.id" class="hidden-chip" @click="unhideSite(r.id)">+ {{ r.name }}</button>
-            <button class="hidden-chip all" @click="unhideAll()">↺ 全部恢复</button>
+          <!-- 其余：去站内搜索（默认展开） -->
+          <div v-if="others.length" class="others">
+            <button class="others-toggle" @click="showOthers = !showOthers">
+              {{ showOthers ? "▾" : "▸" }} 其余 {{ others.length }} 个站点（点击去站内搜索）
+              <span class="others-note">部分站点对机房IP风控 / 为JS渲染，由你浏览器打开后搜</span>
+            </button>
+            <ol class="result-list" v-if="showOthers">
+              <li v-for="(r, i) in others" :key="r.id" class="card neutral" :class="{ locked: r.needsCaptcha }">
+                <div class="rank">{{ verified.length + i + 1 }}</div>
+                <div class="card-body">
+                  <div class="card-top">
+                    <span class="site-name">{{ r.name }}</span>
+                    <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
+                    <span class="q-tag nominal" title="站点标称画质，仅供参考">标称</span>
+                    <span v-if="r.needsCaptcha" class="cap-badge">🔒 去站里搜</span>
+                    <span v-else class="web-badge">🌐 去站里搜</span>
+                    <button class="hide-btn" @click="hideSite(r.id)" title="我打不开这站，隐藏它">✕</button>
+                  </div>
+                  <p class="card-tip" v-if="r.needsCaptcha">该站有人机验证/风控，跳转后请先通过再搜该片</p>
+                  <p class="card-tip" v-else>点「搜该片」直达该站已搜《{{ kw }}》的结果页，打开即能播放</p>
+                </div>
+                <div class="card-actions">
+                  <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
+                </div>
+              </li>
+            </ol>
           </div>
-        </div>
-      </template>
 
-      <p v-else-if="searched && verified.length + others.length === 0" class="hint empty">
-        🙅 暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
-      </p>
+          <!-- 用户手动隐藏的站点：恢复入口 -->
+          <div v-if="hiddenList.length" class="hidden-area">
+            <div class="hidden-head">已手动隐藏 {{ hiddenList.length }} 个站点（你被封 / 不想看到）</div>
+            <div class="hidden-chips">
+              <button v-for="r in hiddenList" :key="r.id" class="hidden-chip" @click="unhideSite(r.id)">+ {{ r.name }}</button>
+              <button class="hidden-chip all" @click="unhideAll()">↺ 全部恢复</button>
+            </div>
+          </div>
+        </template>
 
-      <p v-else class="hint">输入片名，从 {{ SITES.length }} 个影视站聚合检索。全部站点即时可达，已验证有片源的站点会优先展示。</p>
-    </main>
+        <p v-else-if="searched && verified.length + others.length === 0" class="hint empty">
+          🙅 暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
+        </p>
 
-    <footer class="foot">仅聚合跳转第三方影视站 · 本站不存储任何片源 · 请依法合规使用</footer>
+        <p v-else class="hint">输入片名，从 {{ SITES.length }} 个影视站聚合检索。全部站点即时可达，已验证有片源的站点会优先展示。</p>
+      </main>
+      <footer class="foot">仅聚合跳转第三方影视站 · 本站不存储任何片源 · 请依法合规使用</footer>
+    </div>
   </div>
 </template>
 
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  --bg: #0f1117; --panel: #171a21; --panel2: #1e2430; --text: #e8ecf3;
+  --bg: #0c0e14; --panel: #151922; --panel2: #1d2330; --text: #e8ecf3;
   --muted: #8b94a7; --accent: #e6b455; --danger: #ff6b6b;
 }
-body { background: var(--bg); color: var(--text); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; min-height: 100vh; }
+html, body { background: var(--bg); color: var(--text); }
+body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; min-height: 100vh; }
 a { color: inherit; text-decoration: none; }
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+.foot { text-align: center; color: #50586a; font-size: 12px; margin-top: 40px; line-height: 1.8; padding: 0 16px; }
 
-.shell { max-width: 760px; margin: 0 auto; padding: 0 16px 40px; }
-
-.hero { text-align: center; padding: 48px 0 28px; }
-.logo { font-size: 52px; line-height: 1; margin-bottom: 12px; }
-h1 { font-size: 30px; letter-spacing: 2px; color: var(--accent); }
-.sub { margin-top: 10px; color: var(--muted); font-size: 14px; line-height: 1.7; }
-.sub b { color: var(--text); }
-
-.searchbar { display: flex; gap: 10px; margin: 26px auto 14px; max-width: 520px; }
-.searchbar input {
-  flex: 1; padding: 13px 16px; border-radius: 12px; border: 1px solid #2a2f3d;
-  background: var(--panel); color: var(--text); font-size: 16px; outline: none;
+/* ===== 落地主页 ===== */
+.home { flex: 1; display: flex; flex-direction: column; }
+.hero {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; padding: 40px 16px 24px;
+  background:
+    radial-gradient(900px 460px at 50% -10%, rgba(230,180,85,0.16), transparent 60%),
+    radial-gradient(700px 420px at 80% 10%, rgba(108,92,231,0.12), transparent 60%);
 }
-.searchbar input:focus { border-color: var(--accent); }
-.searchbar button {
-  padding: 0 22px; border: 0; border-radius: 12px; cursor: pointer; font-size: 16px;
+.logo { font-size: 64px; line-height: 1; margin-bottom: 14px; filter: drop-shadow(0 6px 20px rgba(230,180,85,0.35)); }
+.hero h1 { font-size: 40px; letter-spacing: 4px; background: linear-gradient(135deg, #ffe2a0, #e8862e); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero .tag { margin-top: 12px; color: var(--text); font-size: 17px; }
+.hero .tag b { color: var(--accent); }
+.hero .sub { margin-top: 6px; color: var(--muted); font-size: 14px; }
+
+.search {
+  display: flex; gap: 10px; margin: 28px auto 16px; width: 100%; max-width: 560px;
+}
+.search input {
+  flex: 1; padding: 15px 18px; border-radius: 14px; border: 1px solid #2a2f3d;
+  background: var(--panel); color: var(--text); font-size: 17px; outline: none;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+}
+.search input:focus { border-color: var(--accent); }
+.search button {
+  padding: 0 26px; border: 0; border-radius: 14px; cursor: pointer; font-size: 17px;
   background: linear-gradient(135deg, #e6b455, #e8862e); color: #1a1205; font-weight: 700;
+  box-shadow: 0 8px 24px rgba(232,134,46,0.35);
 }
-.searchbar button:disabled { opacity: .6; cursor: wait; }
+.search button:disabled { opacity: .6; cursor: wait; }
+.search.compact { max-width: 720px; margin: 0 auto; }
+.search.compact input { padding: 11px 14px; font-size: 15px; border-radius: 11px; }
 
-.hot { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; }
-.hot-tag { color: var(--muted); font-size: 12px; }
+.hot { display: flex; gap: 8px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 6px; }
+.hot-label { color: var(--muted); font-size: 13px; }
 .chip {
   border: 1px solid #2a2f3d; background: transparent; color: var(--muted); font-size: 13px;
-  padding: 5px 12px; border-radius: 999px; cursor: pointer; transition: .2s;
+  padding: 6px 14px; border-radius: 999px; cursor: pointer; transition: .2s;
 }
 .chip:hover { color: var(--accent); border-color: var(--accent); }
 
-.content { margin-top: 14px; }
+.features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 36px auto 0; width: 100%; max-width: 720px; }
+.feature {
+  background: var(--panel); border: 1px solid #232836; border-radius: 16px; padding: 16px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center;
+}
+.f-ico { font-size: 26px; }
+.feature b { font-size: 14px; margin-top: 4px; }
+.feature span { color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+/* ===== 结果页 ===== */
+.results { flex: 1; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 10;
+  padding: 14px 16px; background: rgba(12,14,20,0.85); backdrop-filter: blur(10px);
+  border-bottom: 1px solid #1d2330;
+}
+.back {
+  flex-shrink: 0; width: 38px; height: 38px; border-radius: 11px; border: 1px solid #2a2f3d;
+  background: var(--panel); color: var(--text); font-size: 24px; line-height: 1; cursor: pointer;
+}
+.back:hover { border-color: var(--accent); color: var(--accent); }
+.topbar .search { margin: 0; flex: 1; }
+
+.content { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 16px 16px 0; }
 .hint { color: var(--muted); text-align: center; padding: 30px 0; font-size: 14px; }
 .hint.loading { color: var(--accent); }
 .hint.error { color: var(--danger); }
@@ -373,5 +471,9 @@ h1 { font-size: 30px; letter-spacing: 2px; color: var(--accent); }
 .hidden-chip.all { color: var(--accent); border-color: var(--accent); }
 
 .hint.empty { color: #ffb3b3; }
-.foot { text-align: center; color: #50586a; font-size: 12px; margin-top: 40px; line-height: 1.8; }
+
+@media (max-width: 560px) {
+  .features { grid-template-columns: repeat(2, 1fr); }
+  .hero h1 { font-size: 32px; }
+}
 </style>
