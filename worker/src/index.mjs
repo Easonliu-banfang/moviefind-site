@@ -44,17 +44,35 @@ function posterAllowed(u) {
 async function imgProxy(u) {
   if (!posterAllowed(u)) return j({ ok: false, error: "not allowed" }, 403);
   const host = new URL(u).hostname;
-  const res = await fetch(u, {
+  // 短暂重试：Cloudflare 出口 IP 到部分图床（如 doubanio）偶发 502 / fetch 超时，
+  // 单次失败不代表这张图取不到；重试一次能救回相当一部分。
+  // 硬 403（feisuimg 等 IP/TLS 层拦）没有重试价值，直接返回。
+  const doFetch = () => fetch(u, {
     headers: {
       "User-Agent": UA,
       "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
       "Accept-Language": "zh-CN,zh;q=0.9",
       "Referer": "https://" + host + "/",   // 同源 Referer：击穿 doubanio 等防盗链的关键
     },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(6000),
     redirect: "follow",
   });
-  if (!res.ok) return j({ ok: false, http: res.status }, 502);
+  let res;
+  try { res = await doFetch(); }
+  catch (e1) {
+    try { res = await doFetch(); }
+    catch (e2) { return j({ ok: false, error: String(e2).slice(0, 120) }, 502); }
+  }
+  if (!res.ok) {
+    // 403/404 是确定性失败，不重试；5xx/网络抖动重试一次
+    if (res.status !== 403 && res.status !== 404) {
+      try {
+        const r2 = await doFetch();
+        if (r2.ok) res = r2;
+      } catch { /* 保持首次结果 */ }
+    }
+    if (!res.ok) return j({ ok: false, http: res.status }, 502);
+  }
   const ct = res.headers.get("content-type") || "";
   // 只转发图片：避免本端点被当成通用反向代理去取任意网页（路径白名单只是第一道闸）
   if (!/^image\//i.test(ct)) return j({ ok: false, error: "not an image", ct: ct.slice(0, 60) }, 502);

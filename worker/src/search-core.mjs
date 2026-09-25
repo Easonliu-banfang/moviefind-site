@@ -214,6 +214,10 @@ function collectPosterCands(scope, origin, hints) {
     if (POSTER_HINT_RE.test(nu)) score += 40;   // 路径像片库
     if (fromBg) score += 10;                    // CSS 背景图通常是海报位
     if (/\.gif(\?|$)/i.test(nu)) score -= 200;  // 动图不作封面
+    // 已实测硬 403 的图床（对所有 Referer 都返回 403，IP/TLS 层拦）——
+    // 即便它在 HTML 里位置靠前、标签看着像封面，也几乎不可能加载成功，
+    // 给它大幅降分，让前端优先选用同一站点上确实能访问的候选图。
+    if (/\/pic\.feisuimg\.com\//i.test(nu) || /pic\.feisuimg\.com/i.test(nu)) score -= 300;
     cands.push({ url: nu, label, score });
   };
   for (const t of [...scope.matchAll(MEDIA_TAGS_RE)]) {
@@ -265,15 +269,55 @@ function bestPoster(html, href, origin, hints) {
 // 清理片名噪声：结果卡里常把评分/集数/画质/地区/年份和片名挤在同一个可见文本里
 //（如「8.8 分 狂飙」「已完结 狂飙 2023 / 内地」「654 6.5 HD F1：狂飙」「8.0 HD+137版 流浪地球」），剥掉才好用。
 // 注意别误删片名本身的年份/序号，所以年份只作为「开头」的噪声剥掉。
-const TITLE_LEAD_NOISE = /^(?:\d+(?:\.\d+)?\s*(?=[A-Za-z])|\d+(?:\.\d+)?\s*分|\d{3,4}\s*(?=[^\d])|\d{2,4}\s*集|全部?\d*\s*集|已完结|正片|高清|超清|蓝光|4\s*k|fhd|uhd|hd\+?\s*\d*\s*版?|hd|1080\s*p|720\s*p|未删减|中字|国配|国语|粤语|bf|修复|f\d+)\s*[：:·、,，\-—·+]*/i;
+// 注意：
+// - `\d+(?:\.\d+)?\s+(?=[A-Za-z])` 要求数字和字母间有真空格 —— 否则会把 `4K` 只吃掉 `4`
+//   剩下 `K`（regex 的 `(?=[A-Za-z])` 零宽断言让 `\d+` 停在 `4`，然后 `k` 归给下一段）。
+// - `f\d+` 已从列表移除：`F1：狂飙飞车` 是合法片名，不能当徽章剥掉。
+const TITLE_LEAD_NOISE = /^(?:\d+(?:\.\d+)?\s+(?=[A-Za-z])|\d+(?:\.\d+)?\s*分|\d{3,4}\s*(?=[^\d])|\d{2,4}\s*集|全部?\d*\s*集|已完结|正片|高清|超清|蓝光|4\s*k|fhd|uhd|hd\+?\s*\d*\s*版?|hd|1080\s*p|720\s*p|未删减|中字|国配|国语|粤语|bf|修复|分)\s*[：:·、,，\-—·+]*/i;
 const TITLE_TAIL_NOISE = /[：:·、,，\-—·]?\s*(?:全部?\d*\s*集|已完结|正片|高清|超清|蓝光|hd\+?\s*\d*\s*版?|hd|1080\s*p|720\s*p|中字|未删减|bf)\s*$/i;
 const TITLE_TAIL_META = /\s*[/／]\s*(?:中国大陆|中国内地|内地|中国|大陆|美国|日本|韩国|台湾|香港|泰国|印度|法国|英国|西班牙|德国)\s*$/i;
+// 结尾年份：`狂飙 2023` / `哪吒 2019` 常见。片名结尾不会单独跟 4 位年份（`2001: 太空漫游` 有冒号隔开），安全剥。
+const TITLE_TAIL_YEAR = /\s+\b(?:19|20)\d{2}\b\s*$/;
+// 中段信息噪声（不只在开头/结尾）：更新时间 / 播出时间 / 主演 / 导演 / 演员 /
+// 更新日期 / 角标徽章 / X.X 评分 / 状态标签 —— 这些常夹在片名中间（如
+// 「8.0 已完结 庆余年 8.0 更新时间：0x月xx日 主演…」），必须整段剥掉。
+// 用 \b\d{1,2}\.\d\b 抓评分（不会误伤「2001 太空漫游」这种 4 位年份），
+// 但也不剥「第X季/第X部/第X集」——那属于合法分季信息。
+const TITLE_CLEAN_RE = new RegExp(
+  [
+    "更新时间[：:]?[^，,；;\\s]{0,20}",
+    "播出时间[：:]?[^，,；;\\s]{0,20}",
+    "上映时间[：:]?[^，,；;\\s]{0,20}",
+    "(?:主演|导演|编剧|演员|监制)[：:]?[^，,；;\\s]{0,40}",
+    "年\\d{1,2}月\\d{1,2}日",
+    "\\b\\d{1,2}月\\d{1,2}日\\b",
+    "在线看|免费在线观看|全集在线观看|免费观看|立即播放",
+    "\\[[^\\]]{0,20}\\]",
+    "[【「][^】」]{0,15}[】」]",
+    "\\b\\d{1,2}\\.\\d\\b",
+    "已完结|连载中|热播中|正在更新|更新至|播放中",
+    // 演员名录兜底（无「主演」前缀时）：中文/西文名逗号分隔 —— 片名里几乎不会出现，安全剥。
+    "[\\u4e00-\\u9fff·A-Za-z]{2,12}(?:[,，][\\u4e00-\\u9fff·A-Za-z]{2,12})+",
+  ].join("|"),
+  "g"
+);
 
 function cleanTitle(t) {
   let s = ((t || "").replace(/(封面图片|海报图片|封面|海报|图片)$/, "").replace(/\s+/g, " ")).trim();
+  // 先剥前导噪声 —— 必须先于 TITLE_CLEAN_RE 跑，否则 `\b\d{1,2}\.\d\b` 会把「8.8 分」切成「 分」，
+  // 剩下孤立的「分」TITLE_LEAD_NOISE 抓不到（它要求 \d+ 在「分」前面）。
   let prev;
-  do { prev = s; s = s.replace(TITLE_LEAD_NOISE, "").replace(TITLE_TAIL_NOISE, "").replace(TITLE_TAIL_META, "").trim(); } while (s !== prev);
-  s = s.replace(/[：:·、,，\-—·]\s*$/, "").trim();
+  do { prev = s; s = s.replace(TITLE_LEAD_NOISE, "").trim(); } while (s !== prev);
+  // 中段信息噪声（更新时间/主演/评分等）
+  s = s.replace(TITLE_CLEAN_RE, " ");
+  // 再剥前/尾噪声（TITLE_CLEAN_RE 剥掉中段后，可能会把「8.0 已完结 X 8.0 更新时间」变成「X」，
+  // 也可能留下新的前导/尾部噪声）
+  do { prev = s; s = s.replace(TITLE_LEAD_NOISE, "").replace(TITLE_TAIL_NOISE, "").replace(TITLE_TAIL_META, "").replace(TITLE_TAIL_YEAR, "").trim(); } while (s !== prev);
+  s = s.replace(/\s+/g, " ").replace(/[：:·、,，\-—·]\s*$/, "").trim();
+  // 演员表兜底：cleanTitle 之前切过 80 字符，「主演」二字可能已被截掉、剩下「,戴姆森·伊德瑞斯,哈莉…」的
+  // 演员名录。正规片名几乎不含逗号（中英文都是），出现逗号基本就是演员表/副标题分隔 —— 在首个逗号处截断。
+  const cIdx = s.search(/[,，]/);
+  if (cIdx > 0) s = s.slice(0, cIdx).trim();
   return s || null;
 }
 
@@ -290,19 +334,19 @@ function extractTitle(html, tag, innerHtml, kwSafe) {
   }
   const own = tag ? (tag.match(/\btitle\s*=\s*["']([^"']*)["']/i) || [])[1] : "";
   const ownTitle = own ? own.trim() : "";
-  // 含关键词的来源优先
-  if (txt && txt.includes(kwSafe)) return cleanTitle(txt.slice(0, 40));
-  if (alt && alt.includes(kwSafe)) return cleanTitle(alt.slice(0, 40));
-  if (ownTitle && ownTitle.includes(kwSafe)) return cleanTitle(ownTitle.slice(0, 40));
+  // 含关键词的来源优先（切 80 字符：片名噪声常夹在标题中段，切太短会带着脏尾巴返回）
+  if (txt && txt.includes(kwSafe)) return cleanTitle(txt.slice(0, 80));
+  if (alt && alt.includes(kwSafe)) return cleanTitle(alt.slice(0, 80));
+  if (ownTitle && ownTitle.includes(kwSafe)) return cleanTitle(ownTitle.slice(0, 80));
   // 不含关键词的兜底来源
-  if (txt) return cleanTitle(txt.slice(0, 40));
-  if (alt) return cleanTitle(alt.slice(0, 40));
+  if (txt) return cleanTitle(txt.slice(0, 80));
+  if (alt) return cleanTitle(alt.slice(0, 80));
   if (tag) {
     const idx = html.indexOf((tag.match(/href="([^"]+)"/i) || [])[1] || "");
     if (idx >= 0) {
       const near = html.slice(Math.max(0, idx - 300), idx + 500);
-      const hM = near.match(/<h[1-4][^>]*>\s*([^<]{2,40}?)\s*<\/h[1-4]>/i);
-      if (hM && hM[1].includes(kwSafe)) return cleanTitle(hM[1].trim().slice(0, 40));
+      const hM = near.match(/<h[1-4][^>]*>\s*([^<]{2,60}?)\s*<\/h[1-4]>/i);
+      if (hM && hM[1].includes(kwSafe)) return cleanTitle(hM[1].trim().slice(0, 80));
     }
   }
   return null;
@@ -432,9 +476,17 @@ export function parseResultPage(html, origin, kw) {
 
     let chosenTag = null;
     if (matched.length) {
-      chosenTag = (matched.find((a) => DETAIL_PRIORITY.test(a[0])) ||
-                   matched.find((a) => PLAY_PRIORITY.test(a[0])) ||
-                   matched[0])[0];
+      // 一个关键词往往命中多个锚点（片名/相关推荐/短剧改版），挑「片名最贴近关键词」的那条：
+      // 标题含关键词时按标题长度算距离（越短越可能是纯片名），不含时给 1e6 兜底到原优先级。
+      const dist = (a) => {
+        const t = extractTitle(html, a[0], a[2] || "", kwSafe) || "";
+        return t.includes(kwSafe) ? t.length : 1e6;
+      };
+      const bestD = Math.min(...matched.map(dist));
+      const pool = matched.filter((a) => dist(a) === bestD);
+      chosenTag = (pool.find((a) => DETAIL_PRIORITY.test(a[0])) ||
+                    pool.find((a) => PLAY_PRIORITY.test(a[0])) ||
+                    pool[0])[0];
     }
 
     if (chosenTag) {
