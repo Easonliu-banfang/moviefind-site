@@ -79,11 +79,11 @@ function demo(h) { kw.value = h; doSearch(); }
               </div>
               <div v-if="r.title" class="card-title">匹配：{{ r.title }}</div>
               <p class="card-tip" v-else-if="r.needsCaptcha">该站有人机验证，跳转后请先通过验证再搜该片</p>
-              <p class="card-tip" v-else>该站已找到片源 · 点击直达搜索页</p>
+              <p class="card-tip" v-else>该站已找到片源 · 可立即播放或搜该片</p>
             </div>
             <div class="card-actions">
               <a class="go" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer">搜该片 ↗</a>
-              <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go ghost" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">直达详情</a>
+              <a v-if="r.pageUrl && r.pageUrl !== r.searchUrl" class="go ghost" :href="r.pageUrl" target="_blank" rel="noopener noreferrer">立即播放</a>
             </div>
           </li>
         </ol>
