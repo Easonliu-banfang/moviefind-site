@@ -1,0 +1,42 @@
+/**
+ * moviefind — Cloudflare Worker 入口
+ * 依赖: ./search-core.mjs (站点数据层 + 搜索核心)
+ *
+ * 端点:
+ *   GET /api/search?q=<关键词>[&max=<数量>]  → 聚合搜索，返回有片源站点，延迟升序
+ *   GET /api/sites                          → 站点清单
+ */
+import { run, SITES } from "./search-core.mjs";
+
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET,OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+const j = (obj, status = 200) => new Response(JSON.stringify(obj), {
+  status,
+  headers: { "Content-Type": "application/json", ...CORS },
+});
+
+export default {
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
+
+    try {
+      if (url.pathname === "/api/search") {
+        const q = (url.searchParams.get("q") || "").trim();
+        if (!q) return j({ ok: false, error: "缺少 q 参数" }, 400);
+        const max = Math.min(Math.max(parseInt(url.searchParams.get("max") || "8", 10) || 8, 1), 20);
+        const results = await run.search(q, max);
+        return j({ ok: true, query: q, ts: Date.now(), results });
+      }
+      if (url.pathname === "/api/sites") {
+        return j({ ok: true, sites: SITES.map(s => ({ id: s.id, name: s.name, origin: s.origin, quality: s.quality })) });
+      }
+      return j({ ok: false, error: "Not Found" }, 404);
+    } catch (e) {
+      return j({ ok: false, error: "server error: " + e.message }, 500);
+    }
+  },
+};

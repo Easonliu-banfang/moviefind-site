@@ -1,0 +1,782 @@
+[
+  {
+    "id": "no-video",
+    "name": "No影视",
+    "url": "https://novipnoad.org/",
+    "summary_short": "海外影视剧资源聚合站（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "gaze-red",
+    "name": "注视影视",
+    "url": "https://gaze.red/",
+    "summary_short": "国内海外影视剧资源（需梯子）",
+    "needProxy": true,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "sotvla",
+    "name": "搜TV啦",
+    "url": "https://www.sotvla.cc/",
+    "summary_short": "国内海外高清影视剧资源",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "xlys",
+    "name": "雪落影视",
+    "url": "https://xlys.me/",
+    "summary_short": "国内海外影视剧资源（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "duonao-video",
+    "name": "多瑙影视",
+    "url": "https://www.duonaovod.com",
+    "summary_short": "海外华人在线影院（需梯子）",
+    "needProxy": true,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "tdgo",
+    "name": "白嫖者联盟",
+    "url": "https://www.tdgo.shop",
+    "summary_short": "热门热播剧，无广告速度快（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "ddmf",
+    "name": "蛋蛋魔法",
+    "url": "https://ddmf.net",
+    "summary_short": "国内外热播剧，有福利伦理片（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "sorani",
+    "name": "青空次元",
+    "url": "https://www.sorani.net",
+    "summary_short": "网友称最夯动漫在线站",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "appmovie",
+    "name": "APP影院",
+    "url": "https://www.appmovie.art",
+    "summary_short": "国内外热播剧，纯净无广告",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "ai-movie",
+    "name": "爱电影",
+    "url": "https://kuhh4jo.com",
+    "summary_short": "最新热门电影/电视剧（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "jpyy",
+    "name": "金牌影视",
+    "url": "https://www.vv3nwjk.com",
+    "summary_short": "全网VIP资源（可访问需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "tv-937",
+    "name": "937影视",
+    "url": "https://www.937tv.vip",
+    "summary_short": "看全网影视剧（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "iyf",
+    "name": "爱壹帆",
+    "url": "https://iyf.tv",
+    "summary_short": "海外华人影视站（需梯子/有VIP限制）",
+    "needProxy": true,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "czzymovie",
+    "name": "厂长资源",
+    "url": "https://www.czzymovie.com",
+    "summary_short": "高清、秒播不卡顿，有广告",
+    "needProxy": false,
+    "scores": {
+      "more": 3,
+      "speed": 3,
+      "clean": 3,
+      "stable": 3,
+      "ease": 3
+    },
+    "score_total": 3.0
+  },
+  {
+    "id": "libvio",
+    "name": "LIBVIO",
+    "url": "https://libviobd.com",
+    "summary_short": "海外影视的老牌网站，发布页www.libvio.app",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "auete-video",
+    "name": "Auete影视",
+    "url": "https://www.aeete.com",
+    "summary_short": "蓝光超清精品影视，发布页auete.pro",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "dyrs",
+    "name": "电影人生",
+    "url": "https://dyrs.tv",
+    "summary_short": "高清电影在线观看",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "darkvod",
+    "name": "黑夜影院",
+    "url": "https://darkvod.com",
+    "summary_short": "综合影视/资源多/无广告",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "netflixgc",
+    "name": "奈飞工厂",
+    "url": "https://www.netflixgc.com",
+    "summary_short": "最新美剧，无广告（需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "nfyingshi",
+    "name": "奈菲影视",
+    "url": "https://www.nfyingshi.com",
+    "summary_short": "热门美剧（需梯子/有VIP限制）",
+    "needProxy": false,
+    "scores": {
+      "more": 3,
+      "speed": 3,
+      "clean": 3,
+      "stable": 3,
+      "ease": 3
+    },
+    "score_total": 3.0
+  },
+  {
+    "id": "nivod",
+    "name": "泥视频",
+    "url": "https://www.nivod.vip",
+    "summary_short": "热门国剧，更新快，无广告",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "ppnix",
+    "name": "PPnix",
+    "url": "https://www.ppnix.com/cn/",
+    "summary_short": "热门在线影视，速度快/纯净/无广告",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "dbku",
+    "name": "独播库",
+    "url": "https://www.dbku.tv",
+    "summary_short": "页面无广告，纯净",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "bubu-zhuiju",
+    "name": "布布追剧",
+    "url": "https://bubuzhuiju.com",
+    "summary_short": "速度快，有广告能接受",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "yingmao-cangku",
+    "name": "影猫仓库",
+    "url": "https://www.ymck.pro",
+    "summary_short": "热门影视剧，有广告能接受",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "aikanbot",
+    "name": "爱看机器人",
+    "url": "https://www1.aikanbot.com",
+    "summary_short": "热门电影电视剧（有跳转广告）",
+    "needProxy": false,
+    "scores": {
+      "more": 3,
+      "speed": 3,
+      "clean": 3,
+      "stable": 3,
+      "ease": 3
+    },
+    "score_total": 3.0
+  },
+  {
+    "id": "duse91",
+    "name": "91毒舌",
+    "url": "https://www.duse0.com/",
+    "summary_short": "最新Netflix新剧、4K高清（可访问）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "guangsu-yingshi",
+    "name": "光速影视",
+    "url": "https://www.yingshiso.link/",
+    "summary_short": "作为备选，纯净无广告",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "haohaokan",
+    "name": "好好看",
+    "url": "https://www.hhkan2.com/",
+    "summary_short": "4K高清Netflix新剧（可访问需梯子）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "ifn",
+    "name": "IFN",
+    "url": "https://ifn.watch/register?code=8B1EF6",
+    "summary_short": "为数不多的真4K，部分免费",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "4kvm-cc-18",
+    "name": "4k影视",
+    "url": "https://www.4kvm.cc/",
+    "summary_short": "有广告能接受（需梯子/VIP限制）",
+    "needProxy": true,
+    "scores": {
+      "more": 3,
+      "speed": 3,
+      "clean": 3,
+      "stable": 3,
+      "ease": 3
+    },
+    "score_total": 3.0
+  },
+  {
+    "id": "fdzys",
+    "name": "饭搭子影视",
+    "url": "https://fdzys.com",
+    "summary_short": "最新热门电影电视剧动漫综艺",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "sa-video",
+    "name": "SA视频",
+    "url": "https://www.lsjys11.com/",
+    "summary_short": "最新电影电视剧动漫综艺",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "naifei-fyi-19",
+    "name": "奈飞工厂",
+    "url": "https://naifei.fyi/",
+    "summary_short": "国区可访问，资源无广",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "juok",
+    "name": "剧OK",
+    "url": "https://juok3.top/",
+    "summary_short": "最新电视剧、最新电影",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "dandanqi",
+    "name": "蛋蛋奇",
+    "url": "https://www.dandanqi.cc/",
+    "summary_short": "最新电视剧/电影/无广告",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "zndy",
+    "name": "宅男影视",
+    "url": "https://zndy.top/",
+    "summary_short": "想看就看",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "yingshidaquan",
+    "name": "影视大全",
+    "url": "https://yingshidaquan.top/",
+    "summary_short": "在线搜索播放、官解无广",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "juzong",
+    "name": "剧踪影院",
+    "url": "https://www.juzong01.me/",
+    "summary_short": "海内外 SVIP 超前更新",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "jianyunys",
+    "name": "简云影视",
+    "url": "https://jianyunys.com/",
+    "summary_short": "纯净无广告/1080P高清秒播",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "pianku",
+    "name": "片库",
+    "url": "https://4k01.pianku.online/",
+    "summary_short": "纯净无广告/1080P高清秒播",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "66-dapianwang",
+    "name": "66 大片网",
+    "url": "https://www.77dpw.vip/",
+    "summary_short": "免费电影在线观看",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "xhkan",
+    "name": "星河影视",
+    "url": "https://www.xhkan.top/",
+    "summary_short": "高清无广告_弹幕",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "didahd",
+    "name": "嘀嗒影视",
+    "url": "https://www.didahd.xyz/",
+    "summary_short": "高分电影聚集地，超清秒播",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "zhuiying",
+    "name": "追影",
+    "url": "https://zhuiying3.cc/",
+    "summary_short": "蓝光高清、无广告免费在线秒播",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "wbbb",
+    "name": "歪比巴卜",
+    "url": "https://wbbb1.com/",
+    "summary_short": "高清视频免费在线观看（可访问）",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "kxyy",
+    "name": "开心影院",
+    "url": "https://www.kxyy1.cc/",
+    "summary_short": "最新电影热播电视剧",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "dhvideo",
+    "name": "豆花电影网",
+    "url": "https://dhvideo.cc/",
+    "summary_short": "最新免费电影_在线观看",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "zip0",
+    "name": "ZIP0",
+    "url": "https://zip0.com/?r=KBDIG8",
+    "summary_short": "在线影视搜索与播放",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "aipan-me-25",
+    "name": "爱盼",
+    "url": "https://www.aipan.me/",
+    "summary_short": "4K影视资源聚合站",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  },
+  {
+    "id": "103-39-111-180-29",
+    "name": "可可影视",
+    "url": "https://www.kkys14.com/",
+    "summary_short": "最新Netflix新剧_韩国电影",
+    "needProxy": false,
+    "scores": {
+      "more": 5,
+      "speed": 5,
+      "clean": 5,
+      "stable": 5,
+      "ease": 5
+    },
+    "score_total": 5.0
+  },
+  {
+    "id": "skr-skr1-cc-9",
+    "name": "樱之空",
+    "url": "https://skr.skr1.cc:666/",
+    "summary_short": "国内外各种动漫都比较齐全",
+    "needProxy": false,
+    "scores": {
+      "more": 4,
+      "speed": 4,
+      "clean": 4,
+      "stable": 4,
+      "ease": 4
+    },
+    "score_total": 4.0
+  }
+]
