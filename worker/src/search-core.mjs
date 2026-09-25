@@ -1,8 +1,8 @@
 // 搜索核心：可被 Worker 入口或本地测试复用
 // 站点数据由 awesome-zhuiju-free 仓库 resources.json 提取（在线影视·国内可直连）
 export const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-const REQUEST_TIMEOUT_MS = 3500;
-const MAX_CONCURRENT = 10;
+const REQUEST_TIMEOUT_MS = 9000;
+export const MAX_CONCURRENT = 10;
 export const MAX_TEMPLATES_PER_SITE = 2;
 
 export const SITES = [
@@ -138,6 +138,25 @@ export function parseResultPage(html, origin, kw) {
   const hasIndex = detailCount >= 2;
   return { has: hasIndex, title, detailPath, liveQuality, liveScore,
            pageUrl: detailPath ? abs(detailPath, origin) : null };
+}
+
+// 诊断用：返回单站可达性详情（不严格判定，只看能否拿到含关键词的页面）
+export async function probeSiteDebug(site, kw) {
+  const origin = site.origin;
+  const tpl = (site.templates[0] || "").replace("{origin}", origin).replace("{kw}", encodeURIComponent(kw));
+  const start = Date.now();
+  try {
+    const res = await fetch(tpl, {
+      headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "zh-CN" },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), redirect: "follow",
+    });
+    const latency = Date.now() - start;
+    const html = await res.text();
+    const parsed = parseResultPage(html, origin);
+    return { name: site.name, status: res.status, ok: true, latency, has: parsed.has, kwInHtml: html.includes(kw), len: html.length };
+  } catch (e) {
+    return { name: site.name, ok: false, error: String(e).slice(0, 60), latency: Date.now() - start };
+  }
 }
 
 // 逐个模板探测一个站

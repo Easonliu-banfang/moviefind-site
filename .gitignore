@@ -3,4 +3,5 @@ dist
 .env
 *.local
 .DS_Store
+.wrangler
 data/search_config.json
