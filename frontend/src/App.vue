@@ -37,6 +37,7 @@ function makeCard(site, q) {
     searchUrl: buildSearchUrl(site, q),
     verified: false,
     needsCaptcha: !!site.captcha,
+    dead: false,
     pageUrl: null,
     title: null,
     latency_ms: 0,
@@ -45,14 +46,17 @@ function makeCard(site, q) {
 
 // 已确认有片源（Worker 真的从站点抓到结果且无人机验证）→ 主按钮「立即播放」+ 次「搜该片」
 const verified = computed(() =>
-  results.value.filter((r) => r.verified && !r.needsCaptcha).sort((a, b) => a.latency_ms - b.latency_ms)
+  results.value.filter((r) => r.verified && !r.needsCaptcha && !r.dead).sort((a, b) => a.latency_ms - b.latency_ms)
 );
-// 其余：被风控拦截 / SPA 站点 / 超时 —— 仍给出跳转，由用户浏览器去站内搜
+// 其余：被风控拦截 / SPA 站点 / 超时 —— 仍给出跳转，由用户浏览器去站内搜（真·不可达的 dead 站已隐藏）
 const others = computed(() =>
   results.value
-    .filter((r) => !(r.verified && !r.needsCaptcha))
+    .filter((r) => !(r.verified && !r.needsCaptcha) && !r.dead)
     .sort((a, b) => (b.qualityScore - a.qualityScore) || a.name.localeCompare(b.name, "zh"))
 );
+// 实时统计：存活站点数 / 被自动隐藏的不可达站点数（连接失败 / DNS / 5xx 服务端错误）
+const aliveCount = computed(() => results.value.filter((r) => !r.dead).length);
+const deadCount = computed(() => results.value.filter((r) => r.dead).length);
 
 // 非阻塞：Worker 可选核验，把已确认站点升级为 ✅ 立即播放
 async function enhanceWithWorker(q) {
@@ -71,6 +75,7 @@ async function enhanceWithWorker(q) {
       if (w) {
         card.verified = !!w.verified;
         card.needsCaptcha = !!w.needsCaptcha;
+        card.dead = !!w.dead; // 真·不可达（连接失败/DNS/5xx）→ 自动隐藏
         card.pageUrl = w.pageUrl || null;
         card.title = w.title || null;
         card.latency_ms = w.latency_ms || 0;
@@ -103,7 +108,7 @@ function demo(h) { kw.value = h; doSearch(); }
     <header class="hero">
       <div class="logo">🎬</div>
       <h1>聚合追剧</h1>
-      <p class="sub">一个关键词 · 横扫 <b>{{ SITES.length }}</b> 个影视站 · 全部站点即时可达，已确认有片源优先</p>
+      <p class="sub">一个关键词 · 横扫 <b>{{ SITES.length }}</b> 个影视站 · 全站即时渲染，不可达站点自动隐藏</p>
 
       <div class="searchbar">
         <input
@@ -128,7 +133,7 @@ function demo(h) { kw.value = h; doSearch(); }
       <template v-else-if="searched && results.length">
         <div class="result-head">
           <h2>
-            <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ results.length }}</b> 个站点可达
+            <b>{{ verified.length }}</b> 个已确认有片源 · 共 <b>{{ aliveCount }}</b> 个站点可达
             <span v-if="enhancing" class="enhancing">· 核验中…</span>
           </h2>
           <span class="result-sort">已确认优先 · 其余按画质排序</span>
@@ -136,6 +141,10 @@ function demo(h) { kw.value = h; doSearch(); }
 
         <p v-if="!enhancing && verified.length === 0" class="hint-note">
           说明：部分站点对服务器机房 IP 有反爬拦截，无法在服务端直链到播放页。已为你<b>直达各站「已搜《{{ kw }}》」的结果页</b>，点开即能播放；能直连的站点会自动标 ✅ 立即播放。
+        </p>
+
+        <p v-if="deadCount" class="hint-dead">
+          ⚠️ 已自动隐藏 <b>{{ deadCount }}</b> 个当前不可达的站点（连接失败 / DNS 解析失败 / 服务端 5xx 错误），它们现在也无法在你的浏览器里打开。
         </p>
 
         <!-- 已确认有片源 -->
@@ -186,8 +195,8 @@ function demo(h) { kw.value = h; doSearch(); }
         </div>
       </template>
 
-      <p v-else-if="searched && !results.length" class="hint empty">
-        🙅 暂无可用片源。该片可能较冷门，或站点当前均不可访问，换个关键词试试。
+      <p v-else-if="searched && aliveCount === 0" class="hint empty">
+        🙅 暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
       </p>
 
       <p v-else class="hint">输入片名，从 {{ SITES.length }} 个影视站聚合检索。全部站点即时可达，已验证有片源的站点会优先展示。</p>
@@ -246,6 +255,8 @@ h1 { font-size: 30px; letter-spacing: 2px; color: var(--accent); }
 .result-sort { color: var(--muted); font-size: 12px; }
 .hint-note { color: var(--muted); font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: var(--panel); border: 1px solid #232836; border-radius: 12px; }
 .hint-note b { color: var(--text); }
+.hint-dead { color: #ffb3b3; font-size: 13px; line-height: 1.7; margin: 0 4px 14px; padding: 10px 12px; background: #1b1416; border: 1px solid #4a2a2e; border-radius: 12px; }
+.hint-dead b { color: #ff8c8c; }
 
 .result-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
 .card {

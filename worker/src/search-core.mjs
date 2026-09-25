@@ -279,13 +279,19 @@ export async function findTemplates(site, kw) {
   return { name: site.name, origin, results };
 }
 
-// 逐站探测：只对「该站权威 search 模板」做一次验证尝试（避免对风控站重复抓取拖慢整体）；
-// 命中片源 → verified；被风控/超时/SPA → 仍返回 searchUrl，前端按「去站里搜」处理。
+// 逐站探测：只对「该站权威 search 模板」做一次验证尝试（避免对风控站重复抓取拖慢整体）。
+// 判定优先级：命中片源 → verified(立即播放)；
+//   WAF/风控(4xx，含403/850) → 站点存活但拦机房IP，浏览器可访问 → 保留(去站里搜/需验证)；
+//   服务端错误(5xx) → 视为不可达 → dead，前端自动隐藏；
+//   连接失败/DNS/ENOTFOUND → 确属不可达 → dead，隐藏；
+//   超时 → 保守保留（可能慢或被静默丢弃，不一定是死站，交给浏览器）。
 export async function probeSite(site, kw) {
   const origin = site.origin;
   const searchUrl = buildSearchUrl(site.search || site.templates?.[0], origin, kw);
   const target = searchUrl;
   const start = Date.now();
+  const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
+    latency_ms: 0, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false };
   try {
     const res = await fetch(target, {
       headers: { "User-Agent": UA, "Accept": "text/html", "Accept-Language": "zh-CN" },
@@ -294,25 +300,24 @@ export async function probeSite(site, kw) {
     if (res.ok) {
       const html = await res.text();
       const parsed = parseResultPage(html, origin, kw);
-      if (parsed.needsCaptcha) {
-        return { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
-          latency_ms: Date.now() - start, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: true, blocked: false };
-      }
+      if (parsed.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true };
       if (parsed.has) {
         const p = parsed;
-        return { id: site.id, name: site.name, origin, quality: p.liveQuality || site.quality,
-          qualityScore: p.liveScore || site.qualityScore, latency_ms: Date.now() - start,
-          title: p.title || null, pageUrl: p.pageUrl || target, searchUrl,
-          verified: true, needsCaptcha: false, blocked: false };
+        return { ...base, quality: p.liveQuality || site.quality, qualityScore: p.liveScore || site.qualityScore,
+          latency_ms: Date.now() - start, title: p.title || null, pageUrl: p.pageUrl || target, verified: true };
       }
-    } else if (BLOCKED_STATUS.has(res.status)) {
-      return { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
-        latency_ms: 0, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: true, blocked: true };
+      return base; // 200 但无结果/SPA → 仍交给浏览器去搜
     }
-  } catch { /* 超时/网络失败：当作 SPA/风控，交给浏览器 */ }
-  // 其余（超时/首页/空结果/SPA/非200）：返回 searchUrl，前端按「去站里搜」处理
-  return { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
-    latency_ms: 0, title: null, pageUrl: null, searchUrl, verified: false, needsCaptcha: false, blocked: false };
+    if (res.status >= 500 && res.status < 600) {
+      return { ...base, dead: true, latency_ms: Date.now() - start }; // 服务端错误 → 不可达
+    }
+    // 4xx（WAF/风控 401/403/406/412/419/429/451/499/850）→ 存活但拦机房IP，浏览器可访问
+    return { ...base, needsCaptcha: true, blocked: true, latency_ms: Date.now() - start };
+  } catch (e) {
+    const isTimeout = e && (e.name === "TimeoutError" || e.name === "AbortError" || (e.cause && e.cause.name === "TimeoutError"));
+    if (isTimeout) return base; // 超时：保守保留，交给浏览器
+    return { ...base, dead: true }; // 连接失败 / DNS / ENOTFOUND → 确属不可达，隐藏
+  }
 }
 
 // 通用并发限制
