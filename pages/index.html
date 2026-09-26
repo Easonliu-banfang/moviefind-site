@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>moviefind API relay</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body { font-family: -apple-system, system-ui, sans-serif; background:#0a0c11; color:#e6e6e6;
+         display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+  .card { max-width:480px; padding:32px; border:1px solid #1e2430; border-radius:14px;
+          background:linear-gradient(180deg,rgba(22,27,36,.9),rgba(14,17,24,.92));
+          box-shadow:0 18px 50px rgba(0,0,0,.5); }
+  h1 { font-size:20px; margin:0 0 12px; color:#f2c14e; }
+  p { font-size:14px; line-height:1.7; color:#a0a0a0; margin:0 0 8px; }
+  code { background:#11151d; padding:2px 6px; border-radius:4px; color:#46d18a; font-size:13px; }
+  .ok { color:#46d18a; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>🎬 moviefind API Relay</h1>
+    <p>这是 <b>3F 影视</b> 的 API 中转层（Cloudflare Pages Functions）。</p>
+    <p>用途：让国内客户端可以访问上游 Worker（<code>moviefind-search.17721266011.workers.dev</code>），
+       绕开 <code>*.workers.dev</code> 的 DNS 投毒。</p>
+    <p>前端入口：<code>easonliu-banfang.github.io/moviefind-site/</code></p>
+    <p class="ok">✅ API 路由：/api/search、/api/favicon、/api/img 均已转发。</p>
+  </div>
+</body>
+</html>

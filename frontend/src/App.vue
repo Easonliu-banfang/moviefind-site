@@ -3,8 +3,10 @@ import { ref, computed } from "vue";
 import { SITES } from "./sites.js";
 
 // ====== Cloudflare Worker 实际地址（兜底默认值，可由仓库 Secret VITE_WORKER_URL 覆盖）======
+// 用 Cloudflare Pages Functions 反代，绕开 *.workers.dev 的国内 DNS 投毒。
+// 链路：客户端 → moviefind-search.pages.dev（解析干净）→ Pages Functions → 上游 workers.dev（服务端解析）
 // Worker 仅作「实时核验已确认片源」的可选加分项；全部站点本身就由本地清单即时渲染。
-const WORKER_BASE = (import.meta.env.VITE_WORKER_URL || "https://moviefind-search.17721266011.workers.dev").replace(/\/+$/, "");
+const WORKER_BASE = (import.meta.env.VITE_WORKER_URL || "https://moviefind-search.pages.dev").replace(/\/+$/, "");
 
 const kw = ref("");
 const results = ref([]);

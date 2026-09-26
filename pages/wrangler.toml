@@ -1,0 +1,10 @@
+# Cloudflare Pages 配置
+# 用途：作为 moviefind Worker 的国内可达入口（绕 *.workers.dev DNS 投毒）
+# 部署：wrangler pages project create moviefind-search --production-branch main
+#      wrangler pages deploy . --project-name moviefind-search --commit-dirty=true
+
+name = "moviefind-search"
+compatibility_date = "2026-01-01"
+
+# 整个 pages/ 目录作为静态输出（Functions 在 functions/ 子目录自动被识别）
+pages_build_output_dir = "."
