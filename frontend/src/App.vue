@@ -28,7 +28,7 @@ function hideSite(id) { hiddenIds.value.add(id); saveHidden(); }
 function unhideSite(id) { hiddenIds.value.delete(id); saveHidden(); }
 function unhideAll() { hiddenIds.value = new Set(); saveHidden(); }
 
-const demoHits = ["狂飙", "流浪地球2", "三体", "孤注一掷", "繁花", "年会不能停"];
+const demoHits = [];
 
 // 确定性「海报井」色：由站点 id 哈希出稳定色相，让列表像一面精选海报墙而非千篇一律的卡片。
 function wellHue(id) {
@@ -329,7 +329,6 @@ function goHome() {
   kw.value = "";
 }
 function onKey(e) { if (e.key === "Enter") doSearch(); }
-function demo(h) { kw.value = h; doSearch(); }
 </script>
 
 <template>
@@ -361,8 +360,7 @@ function demo(h) { kw.value = h; doSearch(); }
         </form>
 
         <div class="hot">
-          <span class="hot-label">热门</span>
-          <button v-for="h in demoHits" :key="h" class="chip" @click="demo(h)">{{ h }}</button>
+          <span class="hot-label">搜任何你想看的 · <b>影片中广告切勿相信</b></span>
         </div>
 
         <div class="features">
@@ -608,7 +606,12 @@ a { color: inherit; text-decoration: none; }
 .search.compact button { height: 38px; padding: 0 18px; font-size: 15px; letter-spacing: 1px; }
 
 .hot { display: flex; gap: 9px; justify-content: center; align-items: center; flex-wrap: wrap; margin-top: 8px; }
-.hot-label { color: var(--faint); font-size: 13px; letter-spacing: 2px; }
+.hot-label {
+  color: var(--muted); font-size: 13px; letter-spacing: 2px;
+  padding: 8px 18px; border-radius: 999px;
+  border: 1px dashed var(--line2); background: rgba(255,255,255,.02);
+}
+.hot-label b { color: var(--warn); font-weight: 700; }
 .chip {
   border: 1px solid var(--line2); background: rgba(255,255,255,.02); color: var(--muted); font-size: 13px;
   padding: 7px 15px; border-radius: 999px; cursor: pointer; transition: .2s; font-family: var(--sans);
