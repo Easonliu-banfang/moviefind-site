@@ -107,8 +107,7 @@ export const SITES = [
   { id: "dhvideo", name: "豆花电影网", origin: "https://dhvideo.cc", quality: "1080P", qualityScore: 3,
     search: "{origin}/s.html?name={kw}",
     templates: ["{origin}/s.html?name={kw}"],
-    noVerify: true,
-    challenge: true },
+    noVerify: true },
   { id: "zip0", name: "ZIP0", origin: "https://zip0.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/search?q={kw}",
     templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
@@ -681,20 +680,44 @@ async function probeSiteImpl(site, kw, proxyBase) {
   const base = { id: site.id, name: site.name, origin, quality: site.quality, qualityScore: site.qualityScore,
     latency_ms: 0, title: null, pageUrl: null, poster: null, posterCand: [], searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
   
-  // 聚合器/纯前端 SPA：无服务端搜索、无海报可解析 —— 只探测可达性，不解析片源、不提取封面
-  // 特殊：豆花电影网有 SHA1 计算挑战，需要破解后才能访问真实页面
-  if (site.noVerify) {
-    let f = await fetchWithFallback(target, proxyBase);
-    const latency = Date.now() - start;
-    
-    // 豆花电影网：尝试破解 SHA1 挑战
-    if (site.challenge && f.html && f.html.includes('var hash')) {
+  // 豆花电影网：有 SHA1 计算挑战，需要破解后才能访问真实页面
+  // 破解后解析真实页面的搜索结果（服务端渲染，有真实结果）
+  if (site.challenge) {
+    const f = await fetchWithFallback(target, proxyBase);
+    if (!f.html) {
+      if (f.isTimeout) return base;
+      return { ...base, dead: true };
+    }
+    if (f.status >= 200 && f.status < 300 && f.html.includes('var hash')) {
       const challengeUrl = await solveDhvideoChallenge(f.html, target);
       if (challengeUrl) {
-        f = await fetchWithFallback(challengeUrl, proxyBase);
+        const f2 = await fetchWithFallback(challengeUrl, proxyBase);
+        if (f2.html && f2.status >= 200 && f2.status < 300) {
+          const p = parseResultPage(f2.html, origin, kw);
+          if (p.has && p.results && p.results.length > 0) {
+            return p.results.map((r, idx) => ({
+              ...base, id: p.results.length > 1 ? `${base.id}-${idx}` : base.id,
+              quality: r.liveQuality || site.quality, qualityScore: r.liveScore || site.qualityScore,
+              latency_ms: Date.now() - start, title: r.title || null, pageUrl: r.pageUrl || challengeUrl,
+              poster: r.poster || null, posterCand: r.posterCand || [], verified: true,
+              realQuality: !!(r.liveQuality), viaProxy: !!f2.viaProxy,
+              matchScore: computeMatchScore(r.title, kw),
+              _resultIdx: idx, _totalResults: p.results.length
+            }));
+          }
+        }
       }
     }
-    
+    // 挑战破解失败或无结果，回退到普通处理
+    if (f.status >= 500 && f.status < 600) return { ...base, dead: true };
+    if (f.status >= 400 && f.status < 600) return { ...base, needsCaptcha: true, blocked: true };
+    return { ...base };
+  }
+  
+  // 聚合器/纯前端 SPA：无服务端搜索、无海报可解析 —— 只探测可达性，不解析片源、不提取封面
+  if (site.noVerify) {
+    const f = await fetchWithFallback(target, proxyBase);
+    const latency = Date.now() - start;
     if (!f.html) {
       if (f.isTimeout) return { ...base, latency_ms: latency };
       return { ...base, dead: true, latency_ms: latency };
@@ -716,7 +739,6 @@ async function probeSiteImpl(site, kw, proxyBase) {
       if (res.ok) {
         const json = await res.json();
         if (json && json.code === 1 && json.list && json.list.length > 0) {
-          // 返回所有匹配的结果（标题包含关键词）
           const kwNorm = kw.replace(/\s+/g, "");
           const matched = json.list.filter(item => item.name && item.name.includes(kwNorm));
           const list = (matched.length > 0 ? matched : json.list).slice(0, 10);
@@ -745,17 +767,15 @@ async function probeSiteImpl(site, kw, proxyBase) {
   
   const f = await fetchWithFallback(target, proxyBase);
   if (!f.html) {
-    if (f.isTimeout) return base; // 超时：保守保留，交给浏览器
-    return { ...base, dead: true }; // 连接失败 / DNS / ENOTFOUND → 确属不可达，隐藏
+    if (f.isTimeout) return base;
+    return { ...base, dead: true };
   }
   const html = f.html;
   const status = f.status;
-  // 经代理拿到的 HTML（代理层 200）按「拿到即解析」处理；直连则按状态码分流
   if (status >= 200 && status < 300) {
     const p = parseResultPage(html, origin, kw);
     if (p.needsCaptcha) return { ...base, latency_ms: Date.now() - start, needsCaptcha: true, blocked: !!f.viaProxy };
     if (p.has) {
-      // 多条结果：展开为多个卡片（每站最多 10 条），每条唯一 ID
       if (p.results && p.results.length > 0) {
         return p.results.map((r, idx) => ({
           ...base, id: p.results.length > 1 ? `${base.id}-${idx}` : base.id,
@@ -773,14 +793,12 @@ async function probeSiteImpl(site, kw, proxyBase) {
         realQuality: !!(p.liveQuality), viaProxy: !!f.viaProxy,
         matchScore: computeMatchScore(p.title, kw) };
     }
-    // 200 但未判有片源（JS渲染站/弱信号）→ 仍交给浏览器去搜；封面照样带上（弱信号海报）
     return { ...base, latency_ms: Date.now() - start, title: p.title || null,
              poster: p.poster || null, posterCand: p.posterCand || [], posterGuess: !!p.posterGuess };
   }
   if (status >= 500 && status < 600) {
-    return { ...base, dead: true, latency_ms: Date.now() - start }; // 服务端错误 → 不可达
+    return { ...base, dead: true, latency_ms: Date.now() - start };
   }
-  // 4xx（WAF/风控 401/403/406/412/419/429/451/499/850）→ 存活但拦机房IP，浏览器可访问
   return { ...base, needsCaptcha: true, blocked: true, latency_ms: Date.now() - start };
 }
 
