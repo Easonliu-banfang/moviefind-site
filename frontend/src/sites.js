@@ -27,6 +27,7 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
+    "speed": "slow",
     "pinned": false
   },
   {
@@ -40,7 +41,8 @@ export const SITES = [
     "captcha": true,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "slow"
   },
   {
     "id": "darkvod",
@@ -53,7 +55,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "slow"
   },
   {
     "id": "ppnix",
@@ -64,10 +67,11 @@ export const SITES = [
     "icon": "/icons/ppnix.ico",
     "search": "{origin}/",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
     "pinned": false,
-    "noVerify": true
+    "noVerify": true,
+    "speed": "fast"
   },
   {
     "id": "duse91",
@@ -78,9 +82,10 @@ export const SITES = [
     "icon": "/icons/duse91.ico",
     "search": "{origin}/search?t=KX6GEEJawvxs4v0NMbRQfQ%3D%3D&k={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "fast"
   },
   {
     "id": "ifn",
@@ -91,9 +96,10 @@ export const SITES = [
     "icon": "/icons/ifn.ico",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": true,
-    "pinned": false
+    "pinned": false,
+    "speed": "fast"
   },
   {
     "id": "fdzys",
@@ -107,8 +113,10 @@ export const SITES = [
     "ads": true,
     "login": false,
     "pinned": false,
-    "noVerify": false
-  },  {
+    "noVerify": false,
+    "speed": "slow"
+  },
+  {
     "id": "juok",
     "name": "剧OK",
     "quality": "1080P",
@@ -118,10 +126,12 @@ export const SITES = [
     "favicon": "https://juok3.top/favicon.png",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
-  },  {
+    "pinned": false,
+    "speed": "fast"
+  },
+  {
     "id": "juzong",
     "name": "剧踪影院",
     "quality": "1080P",
@@ -130,9 +140,10 @@ export const SITES = [
     "icon": "/icons/juzong.ico",
     "search": "{origin}/vodsearch/{kw}-------------/",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "fast"
   },
   {
     "id": "jianyunys",
@@ -143,9 +154,10 @@ export const SITES = [
     "icon": "/icons/jianyunys.ico",
     "search": "{origin}/search?keyword={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "fast"
   },
   {
     "id": "pianku",
@@ -156,9 +168,10 @@ export const SITES = [
     "icon": "/icons/pianku.ico",
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "normal"
   },
   {
     "id": "66-dapianwang",
@@ -169,21 +182,10 @@ export const SITES = [
     "icon": "/icons/66-dapianwang.png",
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
-  },
-  {
-    "id": "xhkan",
-    "name": "星河影视",
-    "quality": "1080P",
-    "qualityScore": 3,
-    "origin": "https://www.xhkan.top",
-    "search": "{origin}/index.php/vod/search.html?wd={kw}",
-    "captcha": false,
-    "ads": true,
-    "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "fast"
   },
   {
     "id": "didahd",
@@ -196,7 +198,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "slow"
   },
   {
     "id": "zhuiying",
@@ -210,7 +213,8 @@ export const SITES = [
     "ads": true,
     "login": false,
     "pinned": false
-  },  {
+  },
+  {
     "id": "kxyy",
     "name": "开心影院",
     "quality": "1080P",
@@ -380,4 +384,4 @@ export const SITES = [
     "login": false,
     "pinned": false
   }
-];
+]];
