@@ -100,11 +100,12 @@ function makeCard(site, q) {
     ads: site.ads ?? true,        // 默认"可能含广告"；人工实测无广告的站标 ads:false
     login: site.login ?? false,   // 免登录（实测需登录标 login:true）
     realQuality: false,           // 是否为 Worker 实测画质（否则为站点标称，仅供参考）
-    // 广告/登录状态标签（人工实测标注）
-    statusLabel: site.login === true ? "需登录"
-      : site.ads === true ? "可能含广告"
-      : "无广告·免登录",
-    statusCls: site.login === true ? "st-warn" : site.ads === true ? "st-muted" : "st-good",
+    // 登录状态标签
+    loginLabel: site.login === true ? "需要登录" : "免登录",
+    loginCls: site.login === true ? "st-login-req" : "st-login-free",
+    // 广告状态标签
+    adsLabel: site.ads === true ? "可能含广告" : "无广告",
+    adsCls: site.ads === true ? "st-ads-possible" : "st-ads-none",
     origin: site.origin,
     favicon: site.icon || site.favicon || null,
     searchUrl: buildSearchUrl(site, q),
@@ -225,10 +226,10 @@ async function enhanceWithWorker(q) {
           ads: site.ads ?? true,
           login: site.login ?? false,
           realQuality: !!w.realQuality,
-          statusLabel: site.login === true ? "需登录"
-            : site.ads === true ? "可能含广告"
-            : "无广告·免登录",
-          statusCls: site.login === true ? "st-warn" : site.ads === true ? "st-muted" : "st-good",
+          loginLabel: site.login === true ? "需要登录" : "免登录",
+          loginCls: site.login === true ? "st-login-req" : "st-login-free",
+          adsLabel: site.ads === true ? "可能含广告" : "无广告",
+          adsCls: site.ads === true ? "st-ads-possible" : "st-ads-none",
           origin: site.origin,
           favicon: site.icon || site.favicon || null,
           searchUrl: w.pageUrl || buildSearchUrl(site, q),
@@ -462,7 +463,8 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                   <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
                 </div>
                 <div class="card-status">
-                  <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
+                  <span class="st-tag" :class="r.loginCls">{{ r.loginLabel }}</span>
+                  <span class="st-tag" :class="r.adsCls">{{ r.adsLabel }}</span>
                 </div>
               </div>
               <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
@@ -503,7 +505,8 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                     <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验"><i></i><i></i><i></i></span>
                   </div>
                   <div class="card-status">
-                    <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
+                    <span class="st-tag" :class="r.loginCls">{{ r.loginLabel }}</span>
+                    <span class="st-tag" :class="r.adsCls">{{ r.adsLabel }}</span>
                   </div>
                 </div>
                 <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
@@ -873,6 +876,10 @@ a { color: inherit; text-decoration: none; }
 .st-tag.st-good { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
 .st-tag.st-muted { background: #241f17; color: #c9a86a; border-color: #423620; }
 .st-tag.st-warn { background: #3a2a12; color: var(--warn); border-color: #5a431f; }
+.st-tag.st-login-req { background: #3a1212; color: #ff6b6b; border-color: #5a2020; }
+.st-tag.st-login-free { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
+.st-tag.st-ads-possible { background: #3a2a12; color: var(--warn); border-color: #5a431f; }
+.st-tag.st-ads-none { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
 .v-frames { display: inline-flex; gap: 2px; align-items: center; height: 12px; padding: 1px 3px; background: rgba(233,184,79,0.06); border: 1px solid rgba(233,184,79,0.12); border-radius: 4px; flex-shrink: 0; }
 .v-frames i { display: block; width: 2px; background: var(--well); border: 1px solid var(--line2); animation: frame 1.4s ease-in-out infinite; }
 .v-frames i:nth-child(1) { height: 4px; animation-delay: 0s; }
