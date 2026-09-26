@@ -165,7 +165,7 @@ async function enhanceWithWorker(q) {
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 25000);
-    const r = await fetch(`${WORKER_BASE}/api/search?q=${encodeURIComponent(q)}&max=40`, { signal: ctrl.signal });
+    const r = await fetch(`${WORKER_BASE}/api/search?q=${encodeURIComponent(q)}&max=200`, { signal: ctrl.signal });
     clearTimeout(t);
     if (!r.ok) return;
     const d = await r.json();
