@@ -751,19 +751,38 @@ export async function poolLimit(items, limit, fn) {
 export const run = {
   async search(kw, max = 40, proxyBase = "") {
     const out = [];
+    const noVerifySites = new Set(SITES.filter(s => s.noVerify).map(s => s.id));
     await poolLimit(SITES, MAX_CONCURRENT, async (site) => {
       const r = await probeSite(site, kw, proxyBase);
       // 支持数组（多结果）或单对象（单结果）
       if (Array.isArray(r)) out.push(...r);
       else if (r) out.push(r);
     });
+    // 分离 noVerify 站点（SPA/聚合器）和普通站点
+    // noVerify 站点只探测可达性，不解析片源，所以 matchScore=0, verified=false
+    // 这些站点如果可达（未 dead）应该始终显示，不受 max 限制
+    const noVerifyResults = [];
+    const verifiedResults = [];
+    for (const r of out) {
+      const baseId = r.id.replace(/-\d+$/, "");
+      if (noVerifySites.has(baseId)) {
+        if (!r.dead) noVerifyResults.push(r); // 只保留可达的 noVerify 站点
+      } else {
+        verifiedResults.push(r);
+      }
+    }
     // 排序：关键词匹配度 > 已验证有片源 > 延迟升序 > 画质次之
-    out.sort((a, b) =>
+    verifiedResults.sort((a, b) =>
       ((b.matchScore || 0) - (a.matchScore || 0)) ||
       ((b.verified ? 0 : 1) - (a.verified ? 0 : 1)) ||
       ((a.needsCaptcha ? 1 : 0) - (b.needsCaptcha ? 1 : 0)) ||
       (a.latency_ms - b.latency_ms) ||
       (b.qualityScore - a.qualityScore));
-    return out.slice(0, max);
+    // noVerify 站点按画质排序（它们没有 matchScore）
+    noVerifyResults.sort((a, b) =>
+      ((a.latency_ms || 99999) - (b.latency_ms || 99999)) ||
+      (b.qualityScore - a.qualityScore));
+    // 合并：先放验证结果（受 max 限制），再放 noVerify 站点（不受限制）
+    return [...verifiedResults.slice(0, max), ...noVerifyResults];
   }
 };
