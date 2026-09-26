@@ -67,12 +67,13 @@ export const SITES = [
     "name": "PPnix",
     "quality": "1080P",
     "qualityScore": 3,
-    "origin": "https://www.ppnix.com",
+    "origin": "https://www.ppnix.com/cn",
     "search": "{origin}/",
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "noVerify": true
   },
   {
     "id": "duse91",
