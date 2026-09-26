@@ -117,7 +117,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "noVerify": false
   },
   {
     "id": "sa-video",

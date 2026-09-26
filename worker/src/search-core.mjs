@@ -66,7 +66,7 @@ export const SITES = [
     templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
   { id: "fdzys", name: "饭搭子影视", origin: "https://fdzys.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo",
-    templates: ["{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo"] },
+    templates: ["{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo", "{origin}/vod/search?wd={kw}", "{origin}/search?wd={kw}"] },
   { id: "sa-video", name: "SA视频", origin: "https://www.lsjys11.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/index.php/vod/search.html?wd={kw}",
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
