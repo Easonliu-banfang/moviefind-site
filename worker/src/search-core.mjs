@@ -112,7 +112,8 @@ export const SITES = [
     noVerify: true },
   { id: "zip0", name: "ZIP0", origin: "https://zip0.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/search?q={kw}",
-    templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
+    templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"],
+    apiSearch: "{origin}/api/videos/search?query={kw}&limit=5" },
   { id: "103-39-111-180-29", name: "可可影视", origin: "https://www.kkys14.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/index.php/vod/search.html?wd={kw}",
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
@@ -744,32 +745,50 @@ async function probeSiteImpl(site, kw, proxyBase) {
       });
       if (res.ok) {
         const json = await res.json();
-        if (json && json.code === 1 && json.list && json.list.length > 0) {
+        // 兼容两种格式：
+        //   苹果CMS: { code:1, list:[{id|url, name, pic?}] }
+        //   zip0:   { success:true, data:[{title, url, year?, category?}] }
+        const rawList = (json && json.list && json.list.length > 0)
+          ? json.list
+          : (json && json.data && json.data.length > 0)
+            ? json.data
+            : null;
+        const okFlag = (json && json.code === 1) || (json && json.success === true);
+        if (okFlag && rawList && rawList.length > 0) {
           const kwNorm = kw.replace(/\s+/g, "");
-          const matched = json.list.filter(item => item.name && item.name.includes(kwNorm));
-          const list = (matched.length > 0 ? matched : json.list).slice(0, 10);
+          // 匹配字段：name（苹果CMS）或 title（zip0）
+          const nameOf = (item) => item.name || item.title || "";
+          const matched = rawList.filter(item => nameOf(item).includes(kwNorm));
+          const list = (matched.length > 0 ? matched : rawList).slice(0, 10);
           if (list.length > 0) {
             const results = list.map((item, idx) => {
               // 详情页 URL：
-              //   标准苹果CMS: {id, name, pic} → 拼 /vod/detail/{id}.html
-              //   非标准（如 dbku）: {name, url} → 直接用 item.url
-              const detailUrl = item.url
-                ? (item.url.startsWith("http") ? item.url : origin + item.url)
-                : `${origin}/vod/detail/${item.id}.html`;
+              //   有 item.url → 直接用（zip0 完整 URL / dbku 相对路径 / 其他自定义）
+              //   有 item.id  → 拼标准苹果CMS /vod/detail/{id}.html
+              let detailUrl;
+              if (item.url) {
+                detailUrl = item.url.startsWith("http") ? item.url : origin + item.url;
+              } else if (item.id) {
+                detailUrl = `${origin}/vod/detail/${item.id}.html`;
+              } else {
+                return null; // 既无 url 也无 id，跳过
+              }
               let poster = item.pic || "";
               if (poster && poster.startsWith("/")) poster = origin + poster;
               if (poster && poster.startsWith("//")) poster = "https:" + poster;
               return {
                 id: list.length > 1 ? `${base.id}-${idx}` : base.id,
-                title: item.name, pageUrl: detailUrl, poster: poster || null,
+                title: nameOf(item), pageUrl: detailUrl, poster: poster || null,
                 posterCand: poster ? [poster] : [], _resultIdx: idx, _totalResults: list.length
               };
-            });
-            const first = results[0];
-            return { ...base, latency_ms: Date.now() - start,
-              id: base.id,
-              title: first.title, pageUrl: first.pageUrl, poster: first.poster,
-              posterCand: first.posterCand, verified: true, realQuality: false, results };
+            }).filter(Boolean);
+            if (results.length > 0) {
+              const first = results[0];
+              return { ...base, latency_ms: Date.now() - start,
+                id: base.id,
+                title: first.title, pageUrl: first.pageUrl, poster: first.poster,
+                posterCand: first.posterCand, verified: true, realQuality: false, results };
+            }
           }
         }
       }
