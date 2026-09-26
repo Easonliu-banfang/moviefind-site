@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <style>
+    :root {
+      color: #c6f36b;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        color: #4a7c00;
+      }
+    }
+  </style>
+  <ellipse cx="16" cy="16" rx="9.5" ry="13" fill="none" stroke="currentColor" stroke-width="3" />
+  <path d="M14 11.5 21 16l-7 4.5z" fill="currentColor" />
+</svg>
