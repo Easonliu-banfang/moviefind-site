@@ -1,4 +1,4 @@
-# 🎬 穷鬼影视 (moviefind)
+# 🎬 3F影视 (moviefind)
 
 聚合搜索工具：输入片名 → Cloudflare Worker 并行搜 33 个影视站 → 卡片网格展示片源 → 点击跳转播放。
 

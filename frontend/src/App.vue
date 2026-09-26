@@ -358,7 +358,14 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
 
       <section class="hero">
         <div class="kicker">影视聚合检索 · CINEMA AGGREGATOR</div>
-        <h1 class="title">穷鬼影视</h1>
+        <h1 class="title">3F影视</h1>
+        <div class="tagline">
+          <span class="t-word t-fast">Fast</span>
+          <span class="t-sep">·</span>
+          <span class="t-word t-free">Free</span>
+          <span class="t-sep">·</span>
+          <span class="t-word t-flex">Flexible</span>
+        </div>
 
         <form class="search" @submit.prevent="doSearch">
           <span class="s-glyph" aria-hidden="true">⌕</span>
@@ -598,6 +605,31 @@ a { color: inherit; text-decoration: none; }
 }
 .lede { margin-top: 16px; color: var(--text); font-size: 17px; opacity: .9; }
 .lede b { color: var(--accent); font-weight: 700; }
+
+.tagline {
+  margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  font-family: var(--sans); font-size: 13px; font-weight: 700; letter-spacing: 2.5px;
+  text-transform: uppercase;
+}
+.t-word {
+  padding: 4px 14px; border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.t-fast {
+  background: linear-gradient(135deg, #f2c14e, #e8862e);
+  color: #1a1205;
+}
+.t-free {
+  background: linear-gradient(135deg, #46d18a, #2eb872);
+  color: #0a1a10;
+}
+.t-flex {
+  background: linear-gradient(135deg, #7b6cf6, #5a4ed4);
+  color: #fff;
+}
+.t-sep {
+  color: var(--faint); font-size: 10px; font-weight: 400; opacity: .5;
+}
 
 .search {
   display: flex; align-items: center; gap: 8px; margin: 30px auto 14px; width: 100%; max-width: 580px;
@@ -926,6 +958,8 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 620px) {
   .title { font-size: 52px; letter-spacing: 3px; }
+  .tagline { font-size: 11px; gap: 6px; }
+  .t-word { padding: 3px 10px; }
   .features { grid-template-columns: repeat(2, 1fr); }
   .search button { padding: 0 20px; }
   .card-grid { grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 10px; max-width: none; }
