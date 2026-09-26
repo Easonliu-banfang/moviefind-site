@@ -15,6 +15,10 @@ const searched = ref(false);
 const showOthers = ref(true);
 const view = ref("home"); // 'home' 落地页 | 'results' 结果页
 
+// 封面加载进度追踪
+const posterDone = ref(0);
+const posterTimeout = ref(false);
+
 // 用户手动隐藏的站点（localStorage 持久化）—— 针对「我自己的 IP / 设备 / 浏览器被某站封了」的情况
 const HIDDEN_KEY = "moviefind_hidden_sites";
 function loadHidden() {
@@ -169,6 +173,15 @@ const others = computed(() =>
 // 用户手动隐藏的站点
 const hiddenList = computed(() => results.value.filter((r) => hiddenIds.value.has(r.id)));
 
+// 卡片就绪：封面≥90% 加载完（或超时兜底）才显示
+const cardsReady = computed(() => {
+  if (!searched.value || !results.value.length) return false;
+  if (enhancing.value) return false;
+  const total = results.value.filter(r => r.poster).length;
+  if (total === 0) return true;
+  return posterDone.value >= Math.ceil(total * 0.9) || posterTimeout.value;
+});
+
 // 非阻塞：Worker 可选核验，把已确认站点升级为 ✅ 立即播放，并回填「实测画质」
 // 支持每站多结果：Worker 返回 id 为 `site-id-0`、`site-id-1` 等多条结果时，为每条创建独立卡片
 async function enhanceWithWorker(q) {
@@ -287,6 +300,7 @@ function buildPosterPlan(raw, cands) {
 
 // <img> 加载失败 → 沿回退序列前进一格；序列走完才清空封面（显示 monogram 井）
 function onPosterErr(r) {
+  posterDone.value++;
   const plan = Array.isArray(r._plan) ? r._plan : [];
   if (!plan.length) { r.poster = null; return; }
   let i = typeof r._pi === "number" ? r._pi : plan.indexOf(r.poster);
@@ -294,6 +308,11 @@ function onPosterErr(r) {
   i += 1;
   r._pi = i;
   r.poster = i < plan.length ? plan[i] : null;
+}
+
+// 封面加载成功 → 计入进度
+function onPosterLoad(r) {
+  posterDone.value++;
 }
 
 // 浏览器侧可达性探测：用 no-cors 请求各站搜索页。
@@ -326,10 +345,13 @@ async function doSearch() {
   // 短暂动画后本地即时渲染全部站点（不等待 Worker）
   setTimeout(() => {
     results.value = SITES.map((s) => makeCard(s, q));
-    // 启动 10 秒图标超时计时器（加载失败/超时 → 回退品牌徽章）
     results.value.forEach(r => startFaviconTimer(r));
     searched.value = true;
     loading.value = false;
+    // 封面加载追踪
+    posterDone.value = 0;
+    posterTimeout.value = false;
+    setTimeout(() => { posterTimeout.value = true; }, 15000);
     // 后台并行：Worker 核验 + 浏览器侧可达性探测
     enhanceWithWorker(q);
     probeBrowserReachability();
@@ -358,7 +380,7 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
 
       <section class="hero">
         <div class="kicker">影视聚合检索 · CINEMA AGGREGATOR</div>
-        <h1 class="title"><span class="t-3f">3F</span>影视</h1>
+        <h1 class="title"><span class="t-3f">3F</span><span class="t-rest">影视</span></h1>
         <div class="tagline">
           <span class="t-word t-fast">Fast</span>
           <span class="t-sep">·</span>
@@ -427,15 +449,19 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
       </header>
 
       <main class="content">
-        <!-- 加载 / 核验中：全屏动画 -->
-        <div v-if="loading || (enhancing && searched && results.length)" class="loader">
-          <template v-if="loading">
-            <div class="frames">
-              <span></span><span></span><span></span><span></span><span></span><span></span>
-            </div>
-            <div class="loader-txt">正在从 <b>{{ SITES.length }}</b> 个影视站检索《{{ kw }}》…</div>
-          </template>
-          <template v-else>
+        <!-- 搜索加载 -->
+        <div v-if="loading" class="loader">
+          <div class="frames">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="loader-txt">正在从 <b>{{ SITES.length }}</b> 个影视站检索《{{ kw }}》…</div>
+          <div class="scan"><i></i></div>
+        </div>
+        <p v-else-if="error" class="hint error">{{ error }}</p>
+
+        <!-- 结果页（卡片始终在 DOM，封面≥90% 加载完才显示） -->
+        <div v-else-if="searched && results.length" class="results-shell">
+          <div v-if="!cardsReady" class="loader results-loader">
             <div class="enh-loader">
               <div class="enh-ring">
                 <span class="er er-1"></span>
@@ -446,66 +472,21 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                 <span></span><span></span><span></span><span></span><span></span>
               </div>
             </div>
-            <div class="loader-txt">正在核验 <b>{{ verified.length + others.length }}</b> 个片源，请稍候…</div>
-          </template>
-          <div class="scan"><i></i></div>
-        </div>
-        <p v-else-if="error" class="hint error">{{ error }}</p>
-
-        <template v-else-if="searched && results.length && !enhancing">
-          <div class="result-head">
-            <h2>
-              搜索到 <b>{{ verified.length + others.length }}</b> 个片源
-            </h2>
+            <div class="loader-txt">正在全力查找全网片源</div>
+            <div class="scan"><i></i></div>
           </div>
 
-          <!-- 有片源：卡片网格 -->
-          <div class="card-grid" v-if="verified.length">
-            <a v-for="(r, i) in verified" :key="r.id" class="card ok" :href="r.pageUrl || r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
-              <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
-                <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.title || r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
-                <div v-else class="site-fallback">
-                  <div class="fb-pattern"></div>
-                  <div class="fb-badge">
-                    <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @load="onFaviconLoad(r)" @error="onFaviconErr(r)" />
-                    <span v-else class="fb-brand">
-                      <span class="fb-brand-icon">🎬</span>
-                      <span class="fb-brand-name">{{ r.name }}</span>
-                    </span>
-                  </div>
-                  <div class="fb-name">{{ r.name }}</div>
-                  <div class="fb-sub">资源站</div>
-                </div>
-                <span class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
-                <span class="play-overlay">▶</span>
-              </div>
-              <div class="card-info">
-                <h3 class="card-movie">{{ r.title || r.name }}</h3>
-                <div class="card-meta">
-                  <span class="meta-site">{{ r.name }}</span>
-                  <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
-                </div>
-                <div class="card-status">
-                  <span class="st-tag" :class="r.loginCls">{{ r.loginLabel }}</span>
-                  <span class="st-tag" :class="r.adsCls">{{ r.adsLabel }}</span>
-                  <span class="st-tag" :class="r.speedCls">{{ r.speedLabel }}</span>
-                </div>
-              </div>
-              <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
-            </a>
-          </div>
+          <div :class="['results-body', { 'cards-hidden': !cardsReady }]">
+            <div class="result-head">
+              <h2>
+                搜索到 <b>{{ verified.length + others.length }}</b> 个片源
+              </h2>
+            </div>
 
-          <!-- 其余：去站内搜索 -->
-          <div v-if="others.length" class="others">
-            <button class="others-toggle" @click="showOthers = !showOthers">
-              <span class="caret">{{ showOthers ? "▾" : "▸" }}</span>
-              前往资源站搜索
-              <span class="others-sub">{{ others.length }} 个站点</span>
-            </button>
-            <div class="card-grid" v-if="showOthers">
-              <a v-for="(r, i) in others" :key="r.id" class="card neutral" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
+            <div class="card-grid" v-if="verified.length">
+              <a v-for="(r, i) in verified" :key="r.id" class="card ok" :href="r.pageUrl || r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
                 <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
-                  <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @error="onPosterErr(r)" />
+                  <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.title || r.name" loading="lazy" referrerpolicy="no-referrer" @load="onPosterLoad(r)" @error="onPosterErr(r)" />
                   <div v-else class="site-fallback">
                     <div class="fb-pattern"></div>
                     <div class="fb-badge">
@@ -518,35 +499,76 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                     <div class="fb-name">{{ r.name }}</div>
                     <div class="fb-sub">资源站</div>
                   </div>
-                  <span class="rank">{{ verified.length + i + 1 }}</span>
+                  <span class="rank" :class="{ top: i < 3 }">{{ i + 1 }}</span>
                   <span class="play-overlay">▶</span>
                 </div>
                 <div class="card-info">
-                  <h3 class="card-movie">{{ r.name }}</h3>
+                  <h3 class="card-movie">{{ r.title || r.name }}</h3>
                   <div class="card-meta">
                     <span class="meta-site">{{ r.name }}</span>
-                    <span class="q-badge search-req">需要自行搜索</span>
-                    <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验"><i></i><i></i><i></i></span>
+                    <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
                   </div>
                   <div class="card-status">
                     <span class="st-tag" :class="r.loginCls">{{ r.loginLabel }}</span>
                     <span class="st-tag" :class="r.adsCls">{{ r.adsLabel }}</span>
+                    <span class="st-tag" :class="r.speedCls">{{ r.speedLabel }}</span>
                   </div>
                 </div>
                 <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
               </a>
             </div>
-          </div>
 
-          <!-- 用户手动隐藏的站点：恢复入口 -->
-          <div v-if="hiddenList.length" class="hidden-area">
-            <div class="hidden-head">已手动隐藏 {{ hiddenList.length }} 个站点（你被封 / 不想看到）</div>
-            <div class="hidden-chips">
-              <button v-for="r in hiddenList" :key="r.id" class="hidden-chip" @click="unhideSite(r.id)">+ {{ r.name }}</button>
-              <button class="hidden-chip all" @click="unhideAll()">↺ 全部恢复</button>
+            <div v-if="others.length" class="others">
+              <button class="others-toggle" @click="showOthers = !showOthers">
+                <span class="caret">{{ showOthers ? "▾" : "▸" }}</span>
+                前往资源站搜索
+                <span class="others-sub">{{ others.length }} 个站点</span>
+              </button>
+              <div class="card-grid" v-if="showOthers">
+                <a v-for="(r, i) in others" :key="r.id" class="card neutral" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
+                  <div class="poster-wrap" :style="r.poster ? null : wellStyle(r.id)">
+                    <img v-if="r.poster" class="poster-img" :src="r.poster" :alt="r.name" loading="lazy" referrerpolicy="no-referrer" @load="onPosterLoad(r)" @error="onPosterErr(r)" />
+                    <div v-else class="site-fallback">
+                      <div class="fb-pattern"></div>
+                      <div class="fb-badge">
+                        <img v-if="!r._noFavicon" class="fb-icon" :src="r.favicon || r._faviconUrl || getFavicon(r.origin)" alt="" @load="onFaviconLoad(r)" @error="onFaviconErr(r)" />
+                        <span v-else class="fb-brand">
+                          <span class="fb-brand-icon">🎬</span>
+                          <span class="fb-brand-name">{{ r.name }}</span>
+                        </span>
+                      </div>
+                      <div class="fb-name">{{ r.name }}</div>
+                      <div class="fb-sub">资源站</div>
+                    </div>
+                    <span class="rank">{{ verified.length + i + 1 }}</span>
+                    <span class="play-overlay">▶</span>
+                  </div>
+                  <div class="card-info">
+                    <h3 class="card-movie">{{ r.name }}</h3>
+                    <div class="card-meta">
+                      <span class="meta-site">{{ r.name }}</span>
+                      <span class="q-badge search-req">需要自行搜索</span>
+                      <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验"><i></i><i></i><i></i></span>
+                    </div>
+                    <div class="card-status">
+                      <span class="st-tag" :class="r.loginCls">{{ r.loginLabel }}</span>
+                      <span class="st-tag" :class="r.adsCls">{{ r.adsLabel }}</span>
+                    </div>
+                  </div>
+                  <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
+                </a>
+              </div>
+            </div>
+
+            <div v-if="hiddenList.length" class="hidden-area">
+              <div class="hidden-head">已手动隐藏 {{ hiddenList.length }} 个站点（你被封 / 不想看到）</div>
+              <div class="hidden-chips">
+                <button v-for="r in hiddenList" :key="r.id" class="hidden-chip" @click="unhideSite(r.id)">+ {{ r.name }}</button>
+                <button class="hidden-chip all" @click="unhideAll()">↺ 全部恢复</button>
+              </div>
             </div>
           </div>
-        </template>
+        </div>
 
         <p v-else-if="searched && verified.length + others.length === 0" class="hint empty">
           暂无可用片源。当前所有站点均不可访问，可能是网络问题或站点集体维护，稍后再试。
@@ -610,11 +632,13 @@ a { color: inherit; text-decoration: none; }
 }
 .kicker { font-size: 12px; letter-spacing: 4px; color: var(--accent); opacity: .85; font-weight: 600; }
 .title {
-  font-family: var(--serif); font-size: 78px; line-height: 1.02; margin-top: 14px; font-weight: 700;
+  font-family: var(--serif); font-size: 78px; line-height: 1; margin-top: 14px; font-weight: 700;
   letter-spacing: 6px; color: #f6f1e4;
   text-shadow: 0 2px 30px rgba(242,193,78,.25), 0 1px 0 rgba(255,255,255,.06);
+  display: flex; align-items: center; justify-content: center;
 }
-.t-3f { font-size: 1.35em; background: linear-gradient(135deg, #f2c14e, #e8862e); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: 2px; }
+.t-3f { font-size: 1.3em; line-height: 1; background: linear-gradient(135deg, #f2c14e, #e8862e); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: 2px; }
+.t-rest { line-height: 1; }
 .lede { margin-top: 16px; color: var(--text); font-size: 17px; opacity: .9; }
 .lede b { color: var(--accent); font-weight: 700; }
 
@@ -766,6 +790,11 @@ a { color: inherit; text-decoration: none; }
   0%, 100% { height: 6px; opacity: .35; }
   50% { height: 26px; opacity: 1; box-shadow: 0 0 12px rgba(242,193,78,.4); }
 }
+
+/* 结果页容器：加载遮罩绝对定位覆盖 */
+.results-shell { position: relative; min-height: 50vh; }
+.results-loader { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,12,17,.88); backdrop-filter: blur(6px); }
+.cards-hidden { opacity: 0; pointer-events: none; }
 
 .result-head { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 4px 16px; flex-wrap: wrap; gap: 6px; }
 .result-head h2 { font-size: 19px; font-weight: 700; letter-spacing: .3px; }
