@@ -384,4 +384,4 @@ export const SITES = [
     "pinned": false,
     "speed": "normal"
   }
-]];
+];
