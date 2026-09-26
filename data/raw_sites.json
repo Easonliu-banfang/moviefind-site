@@ -300,21 +300,6 @@
     "score_total": 3.0
   },
   {
-    "id": "nivod",
-    "name": "泥视频",
-    "url": "https://www.nivod.vip",
-    "summary_short": "热门国剧，更新快，无广告",
-    "needProxy": false,
-    "scores": {
-      "more": 5,
-      "speed": 5,
-      "clean": 5,
-      "stable": 5,
-      "ease": 5
-    },
-    "score_total": 5.0
-  },
-  {
     "id": "ppnix",
     "name": "PPnix",
     "url": "https://www.ppnix.com/cn/",

@@ -63,7 +63,8 @@ export const SITES = [
     templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
   { id: "fdzys", name: "饭搭子影视", origin: "https://fdzys.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo",
-    templates: ["{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo", "{origin}/vod/search?wd={kw}", "{origin}/search?wd={kw}"] },
+    templates: ["{origin}/yu-{kw}-xianguan-de-yingpian-shippin-zhibo", "{origin}/vod/search?wd={kw}", "{origin}/search?wd={kw}"],
+    apiSearch: "{origin}/index.php/ajax/suggest?mid=1&wd={kw}&page=1" },
   { id: "juok", name: "剧OK", origin: "https://juok3.top", quality: "1080P", qualityScore: 3,
     favicon: "https://juok3.top/favicon.png",
     search: "{origin}/search?q={kw}",
@@ -755,14 +756,17 @@ async function probeSiteImpl(site, kw, proxyBase) {
             const results = list.map((item, idx) => {
               // 详情页 URL：
               //   有 item.url → 直接用（zip0 完整 URL / dbku 相对路径 / 其他自定义）
+              //   有 item.en  → fdzys 等自定义格式 /duanju/{en}（优先于 id）
               //   有 item.id  → 拼标准苹果CMS /vod/detail/{id}.html
               let detailUrl;
               if (item.url) {
                 detailUrl = item.url.startsWith("http") ? item.url : origin + item.url;
+              } else if (item.en) {
+                detailUrl = `${origin}/duanju/${item.en}`;
               } else if (item.id) {
                 detailUrl = `${origin}/vod/detail/${item.id}.html`;
               } else {
-                return null; // 既无 url 也无 id，跳过
+                return null; // 既无 url 也无 en 也无 id，跳过
               }
               let poster = item.pic || "";
               if (poster && poster.startsWith("/")) poster = origin + poster;
@@ -773,17 +777,37 @@ async function probeSiteImpl(site, kw, proxyBase) {
                 posterCand: poster ? [poster] : [], _resultIdx: idx, _totalResults: list.length
               };
             }).filter(Boolean);
-            // zip0 格式（success:true）API 不返回 poster，从观看页 og:image 提取
-            if (json && json.success === true && results.length > 0 && !results[0].poster) {
+            // API 不返回 poster 时，从详情页提取封面（支持 og:image / data-original / 图片 src）
+            if (results.length > 0 && !results[0].poster) {
               try {
                 const html = await fetch(results[0].pageUrl, {
                   headers: { "User-Agent": UA },
                   signal: AbortSignal.timeout(5000)
                 }).then(r => r.text());
-                const m = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
-                      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
-                if (m && m[1]) {
-                  const poster = m[1].replace(/^\/\//, "https://");
+                let poster = "";
+                // 1. og:image（zip0 等 SPA 站）
+                const ogM = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+                       || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+                if (ogM && ogM[1]) poster = ogM[1];
+                // 2. data-original（苹果CMS lazyload 封面，排除 loading/logo）
+                if (!poster) {
+                  const imgs = [...html.matchAll(/data-original=["']([^"']+)["']/gi)]
+                    .map(m => m[1])
+                    .filter(u => u.endsWith(".jpg") || u.endsWith(".png") || u.endsWith(".webp"))
+                    .filter(u => !u.includes("/static/") && !u.includes("loading") && !u.includes("logo"));
+                  if (imgs.length > 0) poster = imgs[0];
+                }
+                // 3. 直接 src 属性（最后兜底，同样排除静态资源）
+                if (!poster) {
+                  const srcs = [...html.matchAll(/<img[^>]*src=["']([^"']+)["']/gi)]
+                    .map(m => m[1])
+                    .filter(u => u.endsWith(".jpg") || u.endsWith(".png") || u.endsWith(".webp"))
+                    .filter(u => !u.includes("/static/") && !u.includes("loading") && !u.includes("logo"));
+                  if (srcs.length > 0) poster = srcs[0];
+                }
+                if (poster) {
+                  poster = poster.startsWith("//") ? "https:" + poster : poster;
+                  poster = poster.startsWith("/") ? origin + poster : poster;
                   results[0].poster = poster;
                   results[0].posterCand = [poster];
                 }
