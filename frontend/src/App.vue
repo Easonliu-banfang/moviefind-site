@@ -438,7 +438,7 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
     </div>
 
     <!-- ============ 搜索结果页 ============ -->
-    <div v-else class="results">
+    <div v-else :class="['results', { 'no-scroll': !cardsReady }]">
       <header class="topbar">
         <button class="back" @click="goHome" title="返回首页" aria-label="返回首页">
           <span aria-hidden="true">‹</span>
@@ -793,10 +793,25 @@ a { color: inherit; text-decoration: none; }
   50% { height: 26px; opacity: 1; box-shadow: 0 0 12px rgba(242,193,78,.4); }
 }
 
-/* 结果页容器：加载遮罩绝对定位覆盖 */
+/* 结果页容器：加载阶段整页锁死，遮罩固定视口居中 */
 .results-shell { position: relative; min-height: 50vh; }
-.results-loader { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(10,12,17,.88); backdrop-filter: blur(6px); }
+.results-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(10,12,17,.96);
+  backdrop-filter: blur(10px) saturate(1.1);
+  animation: fadeIn .3s ease both;
+}
 .cards-hidden { opacity: 0; pointer-events: none; }
+/* 加载阶段：锁死滚动 + 隐藏页脚，防止卡片在 DOM 里撑大页面产生纵向空白 */
+.results.no-scroll { height: 100vh; overflow: hidden; }
+.results.no-scroll .foot { display: none; }
 
 .result-head { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 4px 16px; flex-wrap: wrap; gap: 6px; }
 .result-head h2 { font-size: 19px; font-weight: 700; letter-spacing: .3px; }
