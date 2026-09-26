@@ -116,7 +116,8 @@ export const SITES = [
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
   { id: "sotvla", name: "搜TV啦", origin: "https://www.sotvla.cc", quality: "1080P", qualityScore: 3,
     search: "{origin}/search.php?q={kw}",
-    templates: ["{origin}/search.php?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
+    templates: ["{origin}/search.php?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"],
+    noVerify: true },
   { id: "libvio", name: "LIBVIO", origin: "https://libviobd.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/index.php/vod/search.html?wd={kw}",
     templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
@@ -426,9 +427,9 @@ async function fetchWithFallback(target, proxyBase) {
     directStatus = res.status;
   } catch (e) {
     const isTimeout = e && (e.name === "TimeoutError" || e.name === "AbortError" || (e.cause && e.cause.name === "TimeoutError"));
-    if (isTimeout) return { html: null, status: 0, isTimeout: true };
-    // 网络层失败（DNS/连接被 reset/TLS）：交给代理救一次
+    // 超时或网络层失败（DNS/连接被 reset/TLS）：交给代理救一次
     if (proxyBase) { const p = await fetchViaProxy(target, proxyBase); if (p) return { html: p.html, status: 200, viaProxy: p.viaProxy }; }
+    if (isTimeout) return { html: null, status: 0, isTimeout: true };
     return { html: null, status: 0, connFailed: true };
   }
   // 直连拿到响应，但被 WAF/风控(4xx)拦截 → 试用代理出口替换（代理 IP 可能不被拦）

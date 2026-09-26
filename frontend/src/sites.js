@@ -303,7 +303,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "noVerify": true
   },
   {
     "id": "libvio",
