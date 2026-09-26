@@ -107,7 +107,8 @@ export const SITES = [
   { id: "dhvideo", name: "豆花电影网", origin: "https://dhvideo.cc", quality: "1080P", qualityScore: 3,
     search: "{origin}/s.html?name={kw}",
     templates: ["{origin}/s.html?name={kw}"],
-    noVerify: true },
+    noVerify: true,
+    challenge: true },
   { id: "zip0", name: "ZIP0", origin: "https://zip0.com", quality: "1080P", qualityScore: 3,
     search: "{origin}/search?q={kw}",
     templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"] },
@@ -611,6 +612,36 @@ export async function findTemplates(site, kw) {
   return { name: site.name, origin, results };
 }
 
+// ===== 豆花电影网 SHA1 挑战破解 =====
+// 挑战机制：JS 计算 sha1(hash + i) === target，找到 i 后跳转 ?attack_key=i
+// Worker 用 crypto.subtle 计算 SHA1，暴力破解找到 i，再带 attack_key 请求真实页面
+async function solveDhvideoChallenge(html, baseUrl) {
+  try {
+    // 提取 hash 和 target
+    const hashMatch = html.match(/var\s+hash\s*=\s*'([^']+)'/);
+    const targetMatch = html.match(/var\s+target\s*=\s*'([^']+)'/);
+    if (!hashMatch || !targetMatch) return null;
+    
+    const hash = hashMatch[1];
+    const target = targetMatch[1];
+    
+    // 暴力破解：找到 i 使得 sha1(hash + i) === target
+    for (let i = 0; i < 1000000; i++) {
+      const input = new TextEncoder().encode(hash + i);
+      const hashBuf = await crypto.subtle.digest('SHA-1', input);
+      const hashHex = [...new Uint8Array(hashBuf)].map(b => b.toString(16).padStart(2, '0')).join('');
+      if (hashHex === target) {
+        // 找到 attack_key，构造真实 URL
+        const sep = baseUrl.includes('?') ? '&' : '?';
+        return baseUrl + sep + 'attack_key=' + i;
+      }
+    }
+  } catch (e) {
+    console.error('Challenge solve failed:', e);
+  }
+  return null;
+}
+
 // 逐站探测：只对「该站权威 search 模板」做一次验证尝试（避免对风控站重复抓取拖慢整体）。
 // 判定优先级：命中片源 → verified(立即播放)；
 //   WAF/风控(4xx，含403/850) → 站点存活但拦机房IP，浏览器可访问 → 保留(去站里搜/需验证)；
@@ -651,9 +682,19 @@ async function probeSiteImpl(site, kw, proxyBase) {
     latency_ms: 0, title: null, pageUrl: null, poster: null, posterCand: [], searchUrl, verified: false, needsCaptcha: false, blocked: false, dead: false, realQuality: false, viaProxy: false };
   
   // 聚合器/纯前端 SPA：无服务端搜索、无海报可解析 —— 只探测可达性，不解析片源、不提取封面
+  // 特殊：豆花电影网有 SHA1 计算挑战，需要破解后才能访问真实页面
   if (site.noVerify) {
-    const f = await fetchWithFallback(target, proxyBase);
+    let f = await fetchWithFallback(target, proxyBase);
     const latency = Date.now() - start;
+    
+    // 豆花电影网：尝试破解 SHA1 挑战
+    if (site.challenge && f.html && f.html.includes('var hash')) {
+      const challengeUrl = await solveDhvideoChallenge(f.html, target);
+      if (challengeUrl) {
+        f = await fetchWithFallback(challengeUrl, proxyBase);
+      }
+    }
+    
     if (!f.html) {
       if (f.isTimeout) return { ...base, latency_ms: latency };
       return { ...base, dead: true, latency_ms: latency };
