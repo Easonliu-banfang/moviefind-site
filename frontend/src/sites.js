@@ -210,9 +210,10 @@ export const SITES = [
     "icon": "/icons/zhuiying.png",
     "search": "{origin}/index.php/vod/search.html?wd={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "normal"
   },
   {
     "id": "kxyy",
@@ -223,9 +224,10 @@ export const SITES = [
     "icon": "/icons/kxyy.png",
     "search": "{origin}/vodsearch/-------------.html?wd={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "fast"
   },
   {
     "id": "dhvideo",
@@ -236,10 +238,11 @@ export const SITES = [
     "icon": "/icons/dhvideo.ico",
     "search": "{origin}/s.html?name={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
     "pinned": false,
-    "noVerify": true
+    "noVerify": true,
+    "speed": "fast"
   },
   {
     "id": "zip0",
@@ -250,21 +253,10 @@ export const SITES = [
     "icon": "/icons/zip0.ico",
     "search": "{origin}/search?q={kw}",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
-    "pinned": false
-  },
-  {
-    "id": "103-39-111-180-29",
-    "name": "可可影视",
-    "quality": "1080P",
-    "qualityScore": 3,
-    "origin": "https://www.kkys14.com",
-    "search": "{origin}/index.php/vod/search.html?wd={kw}",
-    "captcha": false,
-    "ads": true,
-    "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "normal"
   },
   {
     "id": "sotvla",
@@ -278,7 +270,8 @@ export const SITES = [
     "ads": true,
     "login": false,
     "pinned": false,
-    "noVerify": true
+    "noVerify": true,
+    "speed": "normal"
   },
   {
     "id": "libvio",
@@ -304,7 +297,8 @@ export const SITES = [
     "captcha": false,
     "ads": false,
     "login": false,
-    "pinned": true
+    "pinned": true,
+    "speed": "fast"
   },
   {
     "id": "yingmao-cangku",
@@ -317,7 +311,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "slow"
   },
   {
     "id": "guangsu-yingshi",
@@ -330,7 +325,8 @@ export const SITES = [
     "captcha": true,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "normal"
   },
   {
     "id": "naifei-fyi-19",
@@ -343,7 +339,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "normal"
   },
   {
     "id": "zndy",
@@ -356,7 +353,8 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "slow"
   },
   {
     "id": "skr-skr1-cc-9",
@@ -368,8 +366,9 @@ export const SITES = [
     "search": "{origin}/vodsearch/{kw}-------------/",
     "captcha": false,
     "ads": true,
-    "login": true,
-    "pinned": false
+    "login": false,
+    "pinned": false,
+    "speed": "slow"
   },
   {
     "id": "aikanbot",
@@ -382,6 +381,7 @@ export const SITES = [
     "captcha": false,
     "ads": true,
     "login": false,
-    "pinned": false
+    "pinned": false,
+    "speed": "normal"
   }
 ]];
