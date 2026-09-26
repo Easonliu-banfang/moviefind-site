@@ -83,9 +83,6 @@ export const SITES = [
     search: "{origin}/vodsearch/-------------.html?wd={kw}",
     templates: ["{origin}/vodsearch/-------------.html?wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}"],
     apiSearch: "{origin}/index.php/ajax/suggest?mid=1&wd={kw}&page=1" },
-  { id: "xhkan", name: "星河影视", origin: "https://www.xhkan.top", quality: "1080P", qualityScore: 3,
-    search: "{origin}/index.php/vod/search.html?wd={kw}",
-    templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
   { id: "didahd", name: "嘀嗒影视", origin: "https://www.didahd.xyz", quality: "1080P", qualityScore: 3,
     search: "{origin}/search/-------------.html?wd={kw}",
     templates: ["{origin}/search/-------------.html?wd={kw}", "{origin}/index.php/vod/search.html?wd={kw}"],
@@ -106,9 +103,6 @@ export const SITES = [
     search: "{origin}/search?q={kw}",
     templates: ["{origin}/search?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"],
     apiSearch: "{origin}/api/videos/search?query={kw}&limit=5" },
-  { id: "103-39-111-180-29", name: "可可影视", origin: "https://www.kkys14.com", quality: "1080P", qualityScore: 3,
-    search: "{origin}/index.php/vod/search.html?wd={kw}",
-    templates: ["{origin}/index.php/vod/search.html?wd={kw}", "{origin}/index.php?m=vod-search&wd={kw}"] },
   { id: "sotvla", name: "搜TV啦", origin: "https://www.sotvla.cc", quality: "1080P", qualityScore: 3,
     search: "{origin}/search.php?q={kw}",
     templates: ["{origin}/search.php?q={kw}", "{origin}/index.php/vod/search.html?wd={kw}"],
@@ -695,7 +689,7 @@ async function probeSiteImpl(site, kw, proxyBase) {
           const p = parseResultPage(f2.html, origin, kw);
           if (p.has && p.results && p.results.length > 0) {
             return p.results.map((r, idx) => ({
-              ...base, id: p.results.length > 1 ? `${base.id}-${idx}` : base.id,
+              ...base, id: p.results.length > 1 ? `${base.id}__r${idx}` : base.id,
               quality: r.liveQuality || site.quality, qualityScore: r.liveScore || site.qualityScore,
               latency_ms: Date.now() - start, title: r.title || null, pageUrl: r.pageUrl || challengeUrl,
               poster: r.poster || null, posterCand: r.posterCand || [], verified: true,
@@ -814,11 +808,15 @@ async function probeSiteImpl(site, kw, proxyBase) {
               } catch (_) { /* 封面抓取失败不阻塞 */ }
             }
             if (results.length > 0) {
-              const first = results[0];
-              return { ...base, latency_ms: Date.now() - start,
-                id: base.id,
-                title: first.title, pageUrl: first.pageUrl, poster: first.poster,
-                posterCand: first.posterCand, verified: true, realQuality: false, results };
+              // 直接返回数组，与 challenge / HTML 解析路径保持一致
+              // probeSite 外层用 Array.isArray 包装，每条结果独立成卡
+              return results.map((r) => ({
+                ...base,
+                latency_ms: Date.now() - start,
+                id: results.length > 1 ? `${base.id}__r${r._resultIdx}` : base.id,
+                title: r.title, pageUrl: r.pageUrl, poster: r.poster,
+                posterCand: r.posterCand || [], verified: true, realQuality: false
+              }));
             }
           }
         }
@@ -839,7 +837,7 @@ async function probeSiteImpl(site, kw, proxyBase) {
     if (p.has) {
       if (p.results && p.results.length > 0) {
         return p.results.map((r, idx) => ({
-          ...base, id: p.results.length > 1 ? `${base.id}-${idx}` : base.id,
+          ...base, id: p.results.length > 1 ? `${base.id}__r${idx}` : base.id,
           quality: r.liveQuality || site.quality, qualityScore: r.liveScore || site.qualityScore,
           latency_ms: Date.now() - start, title: r.title || null, pageUrl: r.pageUrl || target,
           poster: r.poster || null, posterCand: r.posterCand || [], verified: true,
@@ -886,7 +884,7 @@ export const run = {
     const noVerifyResults = [];
     const verifiedResults = [];
     for (const r of out) {
-      const baseId = r.id.replace(/-\d+$/, "");
+      const baseId = r.id.replace(/__r\d+$/, "");
       if (noVerifySites.has(baseId)) {
         if (!r.dead) noVerifyResults.push(r); // 只保留可达的 noVerify 站点
       } else {

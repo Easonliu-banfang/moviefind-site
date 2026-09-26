@@ -201,7 +201,7 @@ async function enhanceWithWorker(q) {
     // 按 base id 分组（`site-id-0` → base `site-id`）
     const byBaseId = new Map();
     for (const w of workerResults) {
-      const baseId = w.id.replace(/-\d+$/, "");
+      const baseId = w.id.replace(/__r\d+$/, "");
       if (!byBaseId.has(baseId)) byBaseId.set(baseId, []);
       byBaseId.get(baseId).push(w);
     }
