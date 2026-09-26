@@ -358,7 +358,7 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
 
       <section class="hero">
         <div class="kicker">影视聚合检索 · CINEMA AGGREGATOR</div>
-        <h1 class="title">3F影视</h1>
+        <h1 class="title"><span class="t-3f">3F</span>影视</h1>
         <div class="tagline">
           <span class="t-word t-fast">Fast</span>
           <span class="t-sep">·</span>
@@ -427,24 +427,35 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
       </header>
 
       <main class="content">
-        <!-- 加载：胶片帧逐格点亮 + 扫光进度 -->
-        <div v-if="loading" class="loader">
-          <div class="frames">
-            <span></span><span></span><span></span><span></span><span></span><span></span>
-          </div>
-          <div class="loader-txt">正在从 <b>{{ SITES.length }}</b> 个影视站检索《{{ kw }}》…</div>
+        <!-- 加载 / 核验中：全屏动画 -->
+        <div v-if="loading || (enhancing && searched && results.length)" class="loader">
+          <template v-if="loading">
+            <div class="frames">
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="loader-txt">正在从 <b>{{ SITES.length }}</b> 个影视站检索《{{ kw }}》…</div>
+          </template>
+          <template v-else>
+            <div class="enh-loader">
+              <div class="enh-ring">
+                <span class="er er-1"></span>
+                <span class="er er-2"></span>
+                <span class="er er-3"></span>
+              </div>
+              <div class="enh-pulse">
+                <span></span><span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="loader-txt">正在核验 <b>{{ verified.length + others.length }}</b> 个片源，请稍候…</div>
+          </template>
           <div class="scan"><i></i></div>
         </div>
         <p v-else-if="error" class="hint error">{{ error }}</p>
 
-        <template v-else-if="searched && results.length">
+        <template v-else-if="searched && results.length && !enhancing">
           <div class="result-head">
             <h2>
               搜索到 <b>{{ verified.length + others.length }}</b> 个片源
-              <span v-if="enhancing" class="enhancing">
-                <span class="enh-frames"><i></i><i></i><i></i><i></i><i></i></span>
-                核验中
-              </span>
             </h2>
           </div>
 
@@ -603,6 +614,7 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: 6px; color: #f6f1e4;
   text-shadow: 0 2px 30px rgba(242,193,78,.25), 0 1px 0 rgba(255,255,255,.06);
 }
+.t-3f { font-size: 1.35em; background: linear-gradient(135deg, #f2c14e, #e8862e); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; letter-spacing: 2px; }
 .lede { margin-top: 16px; color: var(--text); font-size: 17px; opacity: .9; }
 .lede b { color: var(--accent); font-weight: 700; }
 
@@ -728,6 +740,32 @@ a { color: inherit; text-decoration: none; }
 .scan i { position: absolute; inset: 0; width: 40%; border-radius: 3px; background: linear-gradient(90deg, transparent, var(--accent), transparent); animation: sweep 1.1s infinite ease-in-out; }
 @keyframes sweep { 0% { transform: translateX(-120%); } 100% { transform: translateX(320%); } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* 核验中全屏动画：三重脉冲环 + 波形 */
+.enh-loader { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.enh-ring { position: relative; width: 80px; height: 80px; }
+.er {
+  position: absolute; top: 50%; left: 50%; border-radius: 50%;
+  transform: translate(-50%,-50%); border: 2px solid transparent;
+}
+.er-1 { width: 28px; height: 28px; border-top-color: var(--accent); border-right-color: var(--accent); animation: er-spin 1s linear infinite; }
+.er-2 { width: 52px; height: 52px; border-top-color: #7b6cf6; border-right-color: #7b6cf6; animation: er-spin 1.6s linear infinite reverse; opacity: .7; }
+.er-3 { width: 76px; height: 76px; border-top-color: #46d18a; border-right-color: #46d18a; animation: er-spin 2.2s linear infinite; opacity: .45; }
+@keyframes er-spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+.enh-pulse { display: flex; gap: 4px; align-items: flex-end; height: 28px; }
+.enh-pulse span {
+  width: 5px; border-radius: 3px; background: linear-gradient(180deg, var(--accent), var(--accent2));
+  animation: enh-bar 1s ease-in-out infinite;
+}
+.enh-pulse span:nth-child(1) { animation-delay: 0s; }
+.enh-pulse span:nth-child(2) { animation-delay: .12s; }
+.enh-pulse span:nth-child(3) { animation-delay: .24s; }
+.enh-pulse span:nth-child(4) { animation-delay: .36s; }
+.enh-pulse span:nth-child(5) { animation-delay: .48s; }
+@keyframes enh-bar {
+  0%, 100% { height: 6px; opacity: .35; }
+  50% { height: 26px; opacity: 1; box-shadow: 0 0 12px rgba(242,193,78,.4); }
+}
 
 .result-head { display: flex; justify-content: space-between; align-items: baseline; margin: 6px 4px 16px; flex-wrap: wrap; gap: 6px; }
 .result-head h2 { font-size: 19px; font-weight: 700; letter-spacing: .3px; }
@@ -958,6 +996,7 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 620px) {
   .title { font-size: 52px; letter-spacing: 3px; }
+  .t-3f { font-size: 1.3em; }
   .tagline { font-size: 11px; gap: 6px; }
   .t-word { padding: 3px 10px; }
   .features { grid-template-columns: repeat(2, 1fr); }
