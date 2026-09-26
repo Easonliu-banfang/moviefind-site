@@ -10,8 +10,9 @@ export const SITES = [
     "icon": "/icons/sorani.ico",
     "search": "{origin}/",
     "captcha": false,
-    "ads": true,
+    "ads": false,
     "login": false,
+    "speed": "fast",
     "pinned": false
   },
   {

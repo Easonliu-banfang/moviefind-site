@@ -106,6 +106,9 @@ function makeCard(site, q) {
     // 广告状态标签
     adsLabel: site.ads === true ? "可能含广告" : "无广告",
     adsCls: site.ads === true ? "st-ads-possible" : "st-ads-none",
+    // 速度标签
+    speedLabel: site.speed === "fast" ? "速度快" : site.speed === "slow" ? "速度慢" : "速度一般",
+    speedCls: site.speed === "fast" ? "st-speed-fast" : site.speed === "slow" ? "st-speed-slow" : "st-speed-normal",
     origin: site.origin,
     favicon: site.icon || site.favicon || null,
     searchUrl: buildSearchUrl(site, q),
@@ -230,6 +233,8 @@ async function enhanceWithWorker(q) {
           loginCls: site.login === true ? "st-login-req" : "st-login-free",
           adsLabel: site.ads === true ? "可能含广告" : "无广告",
           adsCls: site.ads === true ? "st-ads-possible" : "st-ads-none",
+          speedLabel: site.speed === "fast" ? "速度快" : site.speed === "slow" ? "速度慢" : "速度一般",
+          speedCls: site.speed === "fast" ? "st-speed-fast" : site.speed === "slow" ? "st-speed-slow" : "st-speed-normal",
           origin: site.origin,
           favicon: site.icon || site.favicon || null,
           searchUrl: w.pageUrl || buildSearchUrl(site, q),
@@ -465,6 +470,7 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                 <div class="card-status">
                   <span class="st-tag" :class="r.loginCls">{{ r.loginLabel }}</span>
                   <span class="st-tag" :class="r.adsCls">{{ r.adsLabel }}</span>
+                  <span class="st-tag" :class="r.speedCls">{{ r.speedLabel }}</span>
                 </div>
               </div>
               <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
@@ -880,6 +886,9 @@ a { color: inherit; text-decoration: none; }
 .st-tag.st-login-free { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
 .st-tag.st-ads-possible { background: #3a2a12; color: var(--warn); border-color: #5a431f; }
 .st-tag.st-ads-none { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
+.st-tag.st-speed-fast { background: var(--good-bg); color: var(--good); border-color: #1f4a36; }
+.st-tag.st-speed-normal { background: #3a2a12; color: var(--warn); border-color: #5a431f; }
+.st-tag.st-speed-slow { background: #3a1212; color: #ff6b6b; border-color: #5a2020; }
 .v-frames { display: inline-flex; gap: 2px; align-items: center; height: 12px; padding: 1px 3px; background: rgba(233,184,79,0.06); border: 1px solid rgba(233,184,79,0.12); border-radius: 4px; flex-shrink: 0; }
 .v-frames i { display: block; width: 2px; background: var(--well); border: 1px solid var(--line2); animation: frame 1.4s ease-in-out infinite; }
 .v-frames i:nth-child(1) { height: 4px; animation-delay: 0s; }
