@@ -8,8 +8,7 @@
 
 ## 线上地址
 
-- 前端：`https://easonliu-banfang.github.io/moviefind-site/`
-- Worker：`https://moviefind-search.17721266011.workers.dev`
+`https://easonliu-banfang.github.io/moviefind-site/`
 
 ---
 
