@@ -138,7 +138,14 @@ function rankScore(r) {
 
 // 可见性：排除 服务端死站(dead) / 浏览器侧连不上(browserDead) / 用户手动隐藏(hidden)
 function isVisible(r) {
-  return !r.dead && !r.browserDead && !hiddenIds.value.has(r.id);
+  // 站点可达（未dead、未browserDead、未隐藏）
+  if (r.dead || r.browserDead || hiddenIds.value.has(r.id)) return false;
+  // 已验证有结果 → 显示
+  if (r.verified) return true;
+  // 需要验证码/被封锁 → 显示（用户知道原因）
+  if (r.needsCaptcha) return true;
+  // 可达但无搜索结果 → 不显示（搜了也搜不到，没意义）
+  return false;
 }
 
 const visibleCards = computed(() => results.value.filter(isVisible));
