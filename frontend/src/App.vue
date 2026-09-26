@@ -460,6 +460,8 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                 <div class="card-meta">
                   <span class="meta-site">{{ r.name }}</span>
                   <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
+                </div>
+                <div class="card-status">
                   <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
                 </div>
               </div>
@@ -496,9 +498,12 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                 <div class="card-info">
                   <h3 class="card-movie">{{ r.name }}</h3>
                   <div class="card-meta">
+                    <span class="meta-site">{{ r.name }}</span>
                     <span class="q-badge search-req">需要自行搜索</span>
-                    <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
                     <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验"><i></i><i></i><i></i></span>
+                  </div>
+                  <div class="card-status">
+                    <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
                   </div>
                 </div>
                 <button class="hide-btn" @click.stop="hideSite(r.id)" title="我打不开这站，隐藏它" aria-label="隐藏该站">✕</button>
@@ -855,6 +860,7 @@ a { color: inherit; text-decoration: none; }
 }
 .card-meta { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .meta-site { font-size: 12px; color: var(--muted); font-weight: 600; }
+.card-status { margin-top: 3px; }
 
 /* 徽章样式 */
 .q-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; color: #1a1205; font-weight: 800; }
