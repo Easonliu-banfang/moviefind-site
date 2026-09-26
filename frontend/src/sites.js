@@ -55,18 +55,6 @@ export const SITES = [
     "pinned": false
   },
   {
-    "id": "nivod",
-    "name": "泥视频",
-    "quality": "1080P",
-    "qualityScore": 3,
-    "origin": "https://www.nivod.vip",
-    "search": "{origin}/index.php/vod/search.html?wd={kw}",
-    "captcha": false,
-    "ads": true,
-    "login": false,
-    "pinned": false
-  },
-  {
     "id": "ppnix",
     "name": "PPnix",
     "quality": "1080P",

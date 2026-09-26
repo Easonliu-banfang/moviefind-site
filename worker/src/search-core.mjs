@@ -773,6 +773,22 @@ async function probeSiteImpl(site, kw, proxyBase) {
                 posterCand: poster ? [poster] : [], _resultIdx: idx, _totalResults: list.length
               };
             }).filter(Boolean);
+            // zip0 格式（success:true）API 不返回 poster，从观看页 og:image 提取
+            if (json && json.success === true && results.length > 0 && !results[0].poster) {
+              try {
+                const html = await fetch(results[0].pageUrl, {
+                  headers: { "User-Agent": UA },
+                  signal: AbortSignal.timeout(5000)
+                }).then(r => r.text());
+                const m = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i)
+                      || html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+                if (m && m[1]) {
+                  const poster = m[1].replace(/^\/\//, "https://");
+                  results[0].poster = poster;
+                  results[0].posterCand = [poster];
+                }
+              } catch (_) { /* 封面抓取失败不阻塞 */ }
+            }
             if (results.length > 0) {
               const first = results[0];
               return { ...base, latency_ms: Date.now() - start,
