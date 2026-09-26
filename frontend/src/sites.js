@@ -119,20 +119,7 @@ export const SITES = [
     "login": false,
     "pinned": false,
     "noVerify": false
-  },
-  {
-    "id": "sa-video",
-    "name": "SA视频",
-    "quality": "1080P",
-    "qualityScore": 3,
-    "origin": "https://www.lsjys11.com",
-    "search": "{origin}/index.php/vod/search.html?wd={kw}",
-    "captcha": false,
-    "ads": true,
-    "login": false,
-    "pinned": false
-  },
-  {
+  },  {
     "id": "juok",
     "name": "剧OK",
     "quality": "1080P",
@@ -145,20 +132,7 @@ export const SITES = [
     "ads": true,
     "login": false,
     "pinned": false
-  },
-  {
-    "id": "yingshidaquan",
-    "name": "影视大全",
-    "quality": "1080P",
-    "qualityScore": 3,
-    "origin": "https://yingshidaquan.top",
-    "search": "{origin}/index.php/vod/search.html?wd={kw}",
-    "captcha": false,
-    "ads": true,
-    "login": false,
-    "pinned": false
-  },
-  {
+  },  {
     "id": "juzong",
     "name": "剧踪影院",
     "quality": "1080P",
@@ -247,21 +221,7 @@ export const SITES = [
     "ads": true,
     "login": false,
     "pinned": false
-  },
-  {
-    "id": "wbbb",
-    "name": "歪比巴卜",
-    "quality": "1080P",
-    "qualityScore": 3,
-    "origin": "https://wbbb1.com",
-    "icon": "/icons/wbbb.ico",
-    "search": "{origin}/index.php/vod/search.html?wd={kw}",
-    "captcha": false,
-    "ads": true,
-    "login": false,
-    "pinned": false
-  },
-  {
+  },  {
     "id": "kxyy",
     "name": "开心影院",
     "quality": "1080P",
