@@ -464,8 +464,8 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
           <div v-if="others.length" class="others">
             <button class="others-toggle" @click="showOthers = !showOthers">
               <span class="caret">{{ showOthers ? "▾" : "▸" }}</span>
-              其余 {{ others.length }} 个站点
-              <span class="others-sub">点击去站内搜索</span>
+              前往资源站搜索
+              <span class="others-sub">{{ others.length }} 个站点</span>
             </button>
             <div class="card-grid" v-if="showOthers">
               <a v-for="(r, i) in others" :key="r.id" class="card neutral" :href="r.searchUrl || r.origin" target="_blank" rel="noopener noreferrer" :style="{ animationDelay: (i * 0.05) + 's' }">
@@ -489,7 +489,7 @@ function onKey(e) { if (e.key === "Enter") doSearch(); }
                 <div class="card-info">
                   <h3 class="card-movie">{{ r.name }}</h3>
                   <div class="card-meta">
-                    <span class="q-badge" :class="qualityClass(r.quality)">{{ r.quality || "未知" }}</span>
+                    <span class="q-badge search-req">需要自行搜索</span>
                     <span class="st-tag" :class="r.statusCls">{{ r.statusLabel }}</span>
                     <span v-if="enhancing && !r.verified" class="v-frames" title="正在核验"><i></i><i></i><i></i></span>
                   </div>
@@ -851,6 +851,7 @@ a { color: inherit; text-decoration: none; }
 
 /* 徽章样式 */
 .q-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; color: #1a1205; font-weight: 800; }
+.q-badge.search-req { background: linear-gradient(135deg, #ff6b6b, #ee5a24); color: #fff; }
 .q-4k { background: linear-gradient(135deg, #ffd76e, #e8862e); }
 .q-bd { background: linear-gradient(135deg, #b18cff, #6c5ce7); color: #fff; }
 .q-hd { background: linear-gradient(135deg, #4fd1c5, #2e9e8e); color: #06231d; }
