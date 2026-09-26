@@ -9,6 +9,51 @@ export const MAX_CONCURRENT = 14;
 // 一个站最多尝试的验证模板数（见 templates）
 export const MAX_TEMPLATES_PER_SITE = 5;
 
+// ====== 苹果CMS 详情页路径探测 ======
+// 苹果CMS 各站的详情页路径不统一：
+//   - 大多站（pianku / 66-dapianwang / kxyy / dbku）: /voddetail/{id}.html
+//   - 少数站: /vod/detail/{id}.html 或 /vod/detail/id/{id}.html
+//   - fdzys 完全自定义: /duanju/{en}
+// 首次遇到某站时抓一次首页 HTML，从其中的详情页链接提取路径模式，缓存在内存里。
+// 之后所有请求直接查缓存，零额外开销。探测失败回退到最常见的 /voddetail/。
+const DETAIL_PATH_CACHE = new Map();
+
+async function detectDetailPath(site) {
+  if (DETAIL_PATH_CACHE.has(site.id)) return DETAIL_PATH_CACHE.get(site.id);
+  try {
+    const r = await fetch(site.origin, {
+      headers: { "User-Agent": UA, "Accept": "text/html" },
+      signal: AbortSignal.timeout(3000),
+      redirect: "follow",
+    });
+    if (!r.ok) throw new Error("homepage " + r.status);
+    const html = await r.text();
+    // 抓所有详情页链接，形态可能是:
+    //   /voddetail/12345.html     （pianku / 66-dapianwang / kxyy / dbku）
+    //   /detail/12345.html        （didahd）
+    //   /vod/detail/12345.html    （少数站）
+    //   /vod/detail/id/12345.html （少数站）
+    // 用正则提取路径前缀（去掉 id 和 .html 后缀），保留任意层级路径
+    const re = /\/([\w\/-]+)\/\d+\.html?/gi;
+    const counts = {};
+    let m;
+    while ((m = re.exec(html))) {
+      const p = m[1].toLowerCase();
+      // 排除明显非详情页的路径（分类页、搜索页、用户页、静态资源等）
+      if (/search|show|type|sort|filter|page|user|login|label|css|js|manifest|touch/.test(p)) continue;
+      counts[p] = (counts[p] || 0) + 1;
+    }
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    if (sorted.length > 0) {
+      DETAIL_PATH_CACHE.set(site.id, sorted[0][0]);
+      return sorted[0][0];
+    }
+  } catch (_) { /* 探测失败走默认 */ }
+  // 兜底：绝大多数苹果CMS 站用这个格式
+  DETAIL_PATH_CACHE.set(site.id, "voddetail");
+  return "voddetail";
+}
+
 // 人机验证 / 反爬挑战页识别（只在「无结果」时才用来标记 needsCaptcha）
 // 注意：刻意只保留强特征（recaptcha/turnstile/请滑动/请输入验证码 等），
 // 去掉「安全验证/防刷/二次验证/5秒」等页脚常见字样，避免误杀有结果的正常页。
@@ -723,6 +768,9 @@ async function probeSiteImpl(site, kw, proxyBase) {
   // API 搜索站点（如黑夜影院）：HTML 是 JS 渲染的 SPA，但后端有 JSON API 返回搜索结果+海报
   if (site.apiSearch) {
     const apiUrl = buildSearchUrl(site.apiSearch, origin, kw);
+    // 并行：API 请求 + 详情页路径探测（首次探测某站时才抓首页，之后走缓存零开销）
+    let detailPathPromise = Promise.resolve("voddetail");
+    if (site.id !== "fdzys") detailPathPromise = detectDetailPath(site);
     try {
       const res = await fetch(apiUrl, {
         headers: { "User-Agent": UA, "Accept": "application/json" },
@@ -747,20 +795,22 @@ async function probeSiteImpl(site, kw, proxyBase) {
           const matched = rawList.filter(item => nameOf(item).includes(kwNorm));
           const list = (matched.length > 0 ? matched : rawList).slice(0, 10);
           if (list.length > 0) {
+            const detailPath = await detailPathPromise;
             const results = list.map((item, idx) => {
-              // 详情页 URL：
-              //   有 item.url → 直接用（zip0 完整 URL / dbku 相对路径 / 其他自定义）
-              //   有 item.en  → fdzys 等自定义格式 /duanju/{en}（优先于 id）
-              //   有 item.id  → 拼标准苹果CMS /vod/detail/{id}.html
+              // 详情页 URL 拼接（按优先级）：
+              //   1. item.url 有值 → 直接用（zip0 完整 URL / dbku 相对路径 / 其他自定义）
+              //   2. fdzys 且 item.en 有值 → /duanju/{en}（fdzys 自定义格式）
+              //   3. item.id 有值 → 用探测到的站详情页路径（如 /voddetail/{id}.html）
+              //   4. 都无 → 跳过该条
               let detailUrl;
               if (item.url) {
                 detailUrl = item.url.startsWith("http") ? item.url : origin + item.url;
-              } else if (item.en) {
+              } else if (site.id === "fdzys" && item.en) {
                 detailUrl = `${origin}/duanju/${item.en}`;
               } else if (item.id) {
-                detailUrl = `${origin}/vod/detail/${item.id}.html`;
+                detailUrl = `${origin}/${detailPath}/${item.id}.html`;
               } else {
-                return null; // 既无 url 也无 en 也无 id，跳过
+                return null;
               }
               let poster = item.pic || "";
               if (poster && poster.startsWith("/")) poster = origin + poster;
